@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Droplets, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { useTheme } from '@/hooks/useTheme';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,7 +9,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 
 export function LoginPage() {
   const { login } = useAuth();
-  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -69,16 +67,13 @@ export function LoginPage() {
 
       {/* Right panel — login form */}
       <div className="flex flex-1 flex-col items-center justify-center bg-background p-6">
-        <div className="mb-8 flex w-full max-w-sm items-center justify-between lg:hidden">
+        <div className="mb-8 flex w-full max-w-sm items-center lg:hidden">
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary">
               <Droplets className="h-5 w-5 text-primary-foreground" />
             </div>
             <span className="font-semibold">Aqua Flow</span>
           </div>
-          <Button variant="ghost" size="sm" onClick={toggleTheme}>
-            {theme === 'light' ? 'Dark' : 'Light'}
-          </Button>
         </div>
 
         <Card className="w-full max-w-sm border shadow-card">

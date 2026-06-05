@@ -1,7 +1,27 @@
 import 'dotenv/config';
 import bcrypt from 'bcryptjs';
 import mongoose from 'mongoose';
-import { User, Area, Driver, Customer, PriceHistory, InventorySettings } from '../models';
+import {
+  User,
+  Area,
+  Driver,
+  Customer,
+  PriceHistory,
+  InventorySettings,
+  DriverAreaAssignment,
+  Delivery,
+  Invoice,
+  Payment,
+  LedgerEntry,
+  DriverDailySettlement,
+  DriverCollection,
+  Expense,
+  CoolerTransaction,
+  AuditLog,
+} from '../models';
+import { startOfDay } from '../utils/date';
+
+const DEFAULT_PRICE = 20;
 
 async function seed() {
   const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/aqua_flow';
@@ -15,13 +35,22 @@ async function seed() {
     Customer.deleteMany({}),
     PriceHistory.deleteMany({}),
     InventorySettings.deleteMany({}),
+    DriverAreaAssignment.deleteMany({}),
+    Delivery.deleteMany({}),
+    Invoice.deleteMany({}),
+    Payment.deleteMany({}),
+    LedgerEntry.deleteMany({}),
+    DriverDailySettlement.deleteMany({}),
+    DriverCollection.deleteMany({}),
+    Expense.deleteMany({}),
+    CoolerTransaction.deleteMany({}),
+    AuditLog.deleteMany({}),
   ]);
 
-  const hashed = await bcrypt.hash('admin123', 10);
   const owner = await User.create({
     name: 'Business Owner',
     email: 'owner@aquaflow.com',
-    password: hashed,
+    password: await bcrypt.hash('admin123', 10),
     role: 'owner',
   });
 
@@ -63,22 +92,56 @@ async function seed() {
   driverUser2.driverProfile = driver2._id;
   await driverUser2.save();
 
-  await Customer.insertMany([
+  const assignmentStart = startOfDay(new Date('2026-01-12'));
+
+  await DriverAreaAssignment.insertMany([
+    {
+      driverId: driver1._id,
+      areaId: areaA._id,
+      assignedBy: owner._id,
+      startDate: assignmentStart,
+      isActive: true,
+      createdBy: owner._id,
+    },
+    {
+      driverId: driver2._id,
+      areaId: areaB._id,
+      assignedBy: owner._id,
+      startDate: assignmentStart,
+      isActive: true,
+      createdBy: owner._id,
+    },
+  ]);
+
+  const customers = await Customer.insertMany([
     {
       name: 'Ramesh Kumar',
       shopName: 'Ramesh General Store',
       mobile: '9123456780',
       address: '12 Market Road, Area A',
       areaId: areaA._id,
+      currentBalance: 3,
+      lastDeliveryDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
       createdBy: owner._id,
     },
     {
       name: 'Suresh Patel',
-      shopName: 'Patel Tea Stall',
+      shopName: 'Patel Pan Shop',
       mobile: '9123456781',
       address: '45 Station Road, Area A',
       areaId: areaA._id,
       customPrice: 22,
+      currentBalance: 4,
+      lastDeliveryDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+      createdBy: owner._id,
+    },
+    {
+      name: 'Meena Devi',
+      shopName: 'Meena Kirana',
+      mobile: '9123456784',
+      address: '22 Temple Street, Area A',
+      areaId: areaA._id,
+      currentBalance: 2,
       createdBy: owner._id,
     },
     {
@@ -87,6 +150,17 @@ async function seed() {
       mobile: '9123456782',
       address: '78 Main Street, Area B',
       areaId: areaB._id,
+      currentBalance: 5,
+      lastDeliveryDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+      createdBy: owner._id,
+    },
+    {
+      name: 'Priya Gupta',
+      shopName: 'Gupta Medical Store',
+      mobile: '9123456785',
+      address: '9 Hospital Lane, Area B',
+      areaId: areaB._id,
+      currentBalance: 1,
       createdBy: owner._id,
     },
     {
@@ -95,12 +169,13 @@ async function seed() {
       mobile: '9123456783',
       address: '3 Food Court, Area C',
       areaId: areaC._id,
+      currentBalance: 6,
       createdBy: owner._id,
     },
   ]);
 
   await PriceHistory.create({
-    price: 20,
+    price: DEFAULT_PRICE,
     effectiveFrom: new Date('2025-01-01'),
     changedBy: owner._id,
   });
@@ -112,10 +187,65 @@ async function seed() {
     updatedBy: owner._id,
   });
 
-  console.log('\nSeed completed!');
-  console.log('Owner: owner@aquaflow.com / admin123');
-  console.log('Driver 1: driver1@aquaflow.com / driver123');
-  console.log('Driver 2: driver2@aquaflow.com / driver123');
+  const today = startOfDay();
+  const yesterday = startOfDay(new Date(Date.now() - 24 * 60 * 60 * 1000));
+  const [patel, ramesh, sharma] = [customers[1], customers[0], customers[3]];
+
+  await Delivery.insertMany([
+    {
+      customerId: patel._id,
+      driverId: driver1._id,
+      areaId: areaA._id,
+      deliveryDate: yesterday,
+      status: 'delivered',
+      filledGiven: 2,
+      emptyReturned: 2,
+      unitPrice: 22,
+      billableAmount: 44,
+      createdBy: driverUser1._id,
+    },
+    {
+      customerId: ramesh._id,
+      driverId: driver1._id,
+      areaId: areaA._id,
+      deliveryDate: today,
+      status: 'delivered',
+      filledGiven: 2,
+      emptyReturned: 1,
+      unitPrice: DEFAULT_PRICE,
+      billableAmount: 40,
+      remarks: 'One empty short',
+      createdBy: driverUser1._id,
+    },
+    {
+      customerId: sharma._id,
+      driverId: driver2._id,
+      areaId: areaB._id,
+      deliveryDate: today,
+      status: 'delivered',
+      filledGiven: 3,
+      emptyReturned: 3,
+      unitPrice: DEFAULT_PRICE,
+      billableAmount: 60,
+      createdBy: driverUser2._id,
+    },
+  ]);
+
+  console.log('\n=== Aqua Flow sample data loaded ===\n');
+  console.log('LOGIN (stored in MongoDB `users` collection, passwords bcrypt-hashed):\n');
+  console.log('  Owner:   owner@aquaflow.com   / admin123');
+  console.log('  Driver:  driver1@aquaflow.com / driver123  (Area A — 3 customers)');
+  console.log('  Driver:  driver2@aquaflow.com / driver123  (Area B — 2 customers)\n');
+  console.log('MongoDB collections populated:');
+  console.log('  users                  — login accounts (owner + 2 drivers)');
+  console.log('  drivers                — driver profiles linked to users');
+  console.log('  areas                  — Area A, B, C');
+  console.log('  customers              — 6 sample shops');
+  console.log('  driverareaassignments  — Driver 1→Area A, Driver 2→Area B');
+  console.log('  pricehistories         — default price ₹20');
+  console.log('  inventorysettings      — 1000 coolers, 800 in warehouse');
+  console.log('  deliveries             — 3 sample delivery records\n');
+  console.log('Re-run anytime: npm run seed (WARNING: wipes demo data)\n');
 
   await mongoose.disconnect();
 }
