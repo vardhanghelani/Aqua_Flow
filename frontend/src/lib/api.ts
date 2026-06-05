@@ -1,4 +1,5 @@
-const API_BASE = '/api';
+/** Local dev defaults to Vite proxy (/api). Production uses VITE_API_URL on Render/Vercel. */
+const API_BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
 
 class ApiClient {
   private token: string | null = localStorage.getItem('token');
