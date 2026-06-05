@@ -8,6 +8,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "seed": "tsx src/scripts/seed.ts",
+    "db:reset": "tsx src/scripts/reset-db.ts",
     "migrate:phase2": "tsx src/scripts/migrate-phase2.ts",
     "migrate:phase3": "tsx src/scripts/migrate-phase3.ts",
     "migrate:ledger": "tsx src/scripts/migrate-ledger-remediation.ts",

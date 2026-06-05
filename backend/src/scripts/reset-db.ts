@@ -9,7 +9,7 @@ async function main() {
 
   await runSeed({ wipe: true });
 
-  console.log('Done. Re-run anytime: npm run db:reset\n');
+  console.log('Database reset complete.\n');
   await mongoose.disconnect();
 }
 

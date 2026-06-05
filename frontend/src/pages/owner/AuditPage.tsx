@@ -27,11 +27,11 @@ export function AuditPage() {
             </thead>
             <tbody>
               {logs.map((log, i) => {
-                const user = log.userId as { name?: string; email?: string } | undefined;
+                const user = log.userId as { name?: string; loginId?: string } | undefined;
                 return (
                   <tr key={i} className="border-b">
                     <td className="py-2">{new Date(log.createdAt as string).toLocaleString('en-IN')}</td>
-                    <td className="py-2">{user?.name || user?.email || '—'}</td>
+                    <td className="py-2">{user?.name || user?.loginId || '—'}</td>
                     <td className="py-2"><Badge>{log.action as string}</Badge></td>
                     <td className="py-2">{log.entityType as string}</td>
                   </tr>

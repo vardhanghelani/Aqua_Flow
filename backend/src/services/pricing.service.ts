@@ -25,5 +25,5 @@ export async function setNewPrice(price: number, userId: string): Promise<void> 
 }
 
 export async function getPriceHistory() {
-  return PriceHistory.find().populate('changedBy', 'name email').sort({ effectiveFrom: -1 });
+  return PriceHistory.find().populate('changedBy', 'name loginId').sort({ effectiveFrom: -1 });
 }

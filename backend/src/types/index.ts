@@ -5,7 +5,7 @@ export type UserRole = 'owner' | 'driver';
 
 export interface AuthUser {
   id: string;
-  email: string;
+  loginId: string;
   role: UserRole;
   name: string;
   driverId?: string;

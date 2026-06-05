@@ -75,7 +75,7 @@ export async function deleteArea(req: AuthRequest, res: Response, next: NextFunc
 export const driverValidation = [
   body('name').notEmpty(),
   body('mobile').notEmpty(),
-  body('email').optional().isEmail(),
+  body('loginId').optional().isString().trim().notEmpty(),
   body('password').optional().isLength({ min: 6 }),
 ];
 
@@ -83,7 +83,7 @@ export async function listDrivers(req: AuthRequest, res: Response, next: NextFun
   try {
     const includeDeleted = req.query.includeDeleted === 'true';
     const drivers = await Driver.find(notDeletedFilter(includeDeleted))
-      .populate('userId', 'email isActive')
+      .populate('userId', 'loginId isActive')
       .sort({ name: 1 });
     res.json({ success: true, data: drivers });
   } catch (err) {
@@ -93,16 +93,17 @@ export async function listDrivers(req: AuthRequest, res: Response, next: NextFun
 
 export async function createDriver(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    const { name, mobile, email, password } = req.body;
+    const { name, mobile, loginId, password } = req.body;
     let userId;
 
-    if (email && password) {
-      const exists = await User.findOne({ email: email.toLowerCase() });
-      if (exists) throw new ApiError(409, 'Email already in use');
+    if (loginId && password) {
+      const normalized = String(loginId).trim().toLowerCase();
+      const exists = await User.findOne({ loginId: normalized });
+      if (exists) throw new ApiError(409, 'Login ID already in use');
       const hashed = await bcrypt.hash(password, 10);
       const user = await User.create({
         name,
-        email: email.toLowerCase(),
+        loginId: normalized,
         password: hashed,
         role: 'driver',
         createdBy: req.user!.id,

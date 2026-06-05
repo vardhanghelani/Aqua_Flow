@@ -45,7 +45,7 @@ cd backend
 npm run seed
 ```
 
-Default owner: `owner@aquaflow.com` / `admin123`
+Default owner: `owner` / `admin123`
 
 ## Documentation
 

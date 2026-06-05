@@ -31,10 +31,10 @@ class ApiClient {
   }
 
   // Auth
-  login(email: string, password: string) {
+  login(loginId: string, password: string) {
     return this.request<{ user: import('@/types').User; token: string }>('/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ loginId, password }),
     });
   }
 

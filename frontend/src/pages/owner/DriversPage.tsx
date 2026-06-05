@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 export function DriversPage() {
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: '', mobile: '', email: '', password: '' });
+  const [form, setForm] = useState({ name: '', mobile: '', loginId: '', password: '' });
 
   const load = () => api.getDrivers().then(setDrivers);
   useEffect(() => { load(); }, []);
@@ -21,7 +21,7 @@ export function DriversPage() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     await api.createDriver(form);
-    setForm({ name: '', mobile: '', email: '', password: '' });
+    setForm({ name: '', mobile: '', loginId: '', password: '' });
     setShowForm(false);
     load();
   };
@@ -41,7 +41,7 @@ export function DriversPage() {
             <form onSubmit={handleCreate} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div><Label>Name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></div>
               <div><Label>Mobile</Label><Input value={form.mobile} onChange={(e) => setForm({ ...form, mobile: e.target.value })} required /></div>
-              <div><Label>Login Email</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
+              <div><Label>Login ID</Label><Input value={form.loginId} onChange={(e) => setForm({ ...form, loginId: e.target.value })} placeholder="driver3" /></div>
               <div><Label>Password</Label><Input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></div>
               <div className="sm:col-span-2"><Button type="submit">Save Driver</Button></div>
             </form>
@@ -56,7 +56,7 @@ export function DriversPage() {
               <tr className="border-b text-left text-muted-foreground">
                 <th className="pb-2">Name</th>
                 <th className="pb-2">Mobile</th>
-                <th className="pb-2">Login</th>
+                <th className="pb-2">Login ID</th>
                 <th className="pb-2">Status</th>
                 <th className="pb-2"></th>
               </tr>
@@ -66,7 +66,7 @@ export function DriversPage() {
                 <tr key={d._id} className="border-b">
                   <td className="py-3 font-medium">{d.name}</td>
                   <td className="py-3">{d.mobile}</td>
-                  <td className="py-3">{d.userId?.email || '—'}</td>
+                  <td className="py-3">{d.userId?.loginId || '—'}</td>
                   <td className="py-3"><Badge variant={d.isActive ? 'success' : 'destructive'}>{d.isActive ? 'Active' : 'Inactive'}</Badge></td>
                   <td className="py-3">
                     <Link to={`/drivers/${d._id}/performance`} className="inline-flex items-center gap-1 text-sm text-primary hover:underline">

@@ -10,7 +10,7 @@ function assert(condition: boolean, message: string) {
 }
 
 console.log('\nDriver ownership');
-const driverReq = { user: { id: '1', role: 'driver' as const, driverId: 'drv1', email: '', name: '' } } as AuthRequest;
+const driverReq = { user: { id: '1', role: 'driver' as const, driverId: 'drv1', loginId: 'driver1', name: '' } } as AuthRequest;
 assert(resolveDriverId(driverReq) === 'drv1', 'driver uses session driverId');
 
 let threw = false;

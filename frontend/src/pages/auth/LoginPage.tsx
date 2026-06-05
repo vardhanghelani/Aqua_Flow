@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 export function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState('');
+  const [loginId, setLoginId] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
@@ -21,7 +21,7 @@ export function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      await login(email, password);
+      await login(loginId, password);
       const stored = localStorage.getItem('token');
       if (stored) {
         const payload = JSON.parse(atob(stored.split('.')[1]));
@@ -84,8 +84,8 @@ export function LoginPage() {
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="email">Email address</Label>
-                <Input id="email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="owner@aquaflow.com" />
+                <Label htmlFor="loginId">Login ID</Label>
+                <Input id="loginId" type="text" autoComplete="username" value={loginId} onChange={(e) => setLoginId(e.target.value)} required placeholder="owner" />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="password">Password</Label>
@@ -124,8 +124,8 @@ export function LoginPage() {
             {import.meta.env.VITE_DEMO_MODE === 'true' && (
               <div className="mt-6 rounded-md border bg-muted/50 p-3 text-xs text-muted-foreground">
                 <p className="font-medium text-foreground">Demo accounts</p>
-                <p className="mt-1">Owner: owner@aquaflow.com / admin123</p>
-                <p>Driver: driver1@aquaflow.com / driver123</p>
+                <p className="mt-1">Owner: owner / admin123</p>
+                <p>Driver: driver1 / driver123</p>
               </div>
             )}
           </CardContent>

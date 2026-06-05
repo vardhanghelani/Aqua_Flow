@@ -23,7 +23,7 @@ router.get('/', async (req, res, next) => {
 
     const [items, total] = await Promise.all([
       AuditLog.find(query)
-        .populate('userId', 'name email role')
+        .populate('userId', 'name loginId role')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit),

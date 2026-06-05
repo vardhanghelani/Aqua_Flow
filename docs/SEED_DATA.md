@@ -1,58 +1,81 @@
-# Aqua Flow — Sample / Demo Data
+# Reset MongoDB & Load Fresh Sample Data
 
-Run the seed script to load test data into MongoDB:
+This **deletes everything** in the database and loads new demo data.
 
-```bash
-cd backend
-npm run seed
+---
+
+## Login after reset
+
+| Role | Login ID | Password |
+|------|----------|----------|
+| Owner | `owner` | `admin123` |
+| Driver (Area A) | `driver1` | `driver123` |
+| Driver (Area B) | `driver2` | `driver123` |
+
+---
+
+## Option 1 — From your PC (recommended)
+
+### Local database
+
+```powershell
+cd E:\Aqua_Flow\backend
+npm run db:reset
 ```
 
-**Warning:** This **deletes** existing users, areas, drivers, customers, assignments, deliveries, invoices, payments, and related demo records, then recreates sample data.
+### Production database (Render / Atlas)
 
-For production (Render), run the same command in **Render Shell** on the backend service.
+1. Render dashboard → backend → **Environment** → copy `MONGODB_URI`
+2. Paste into `backend/.env` as `MONGODB_URI=...`
+3. Run:
 
----
+```powershell
+cd E:\Aqua_Flow\backend
+npm run db:reset
+```
 
-## Login credentials
+4. Restore local `.env` afterward if needed
 
-| Role | Email | Password |
-|------|-------|----------|
-| Owner | `owner@aquaflow.com` | `admin123` |
-| Driver (Area A) | `driver1@aquaflow.com` | `driver123` |
-| Driver (Area B) | `driver2@aquaflow.com` | `driver123` |
-
-Passwords are stored **hashed** (bcrypt) in MongoDB — you cannot read the plain password from the database.
-
----
-
-## MongoDB collections (documents)
-
-| Collection | What is stored |
-|------------|----------------|
-| `users` | Login accounts (`email`, hashed `password`, `role`: owner \| driver) |
-| `drivers` | Driver profile (`name`, `mobile`, link to `users` via `userId`) |
-| `areas` | Area A, Area B, Area C |
-| `customers` | 6 sample shops with addresses and cooler balances |
-| `driverareaassignments` | Driver 1 → Area A, Driver 2 → Area B (active) |
-| `pricehistories` | Default cooler price ₹20 |
-| `inventorysettings` | Total coolers, warehouse stock |
-| `deliveries` | 3 sample delivery records |
+Both `npm run seed` and `npm run db:reset` do the same thing: **wipe DB + reload sample data**.
 
 ---
 
-## Sample business data
+## Option 2 — On Render (no Shell on free tier)
 
-**Areas:** Area A (North), Area B (South), Area C (East)
+1. Render → backend → **Environment**
+2. Add: `SEED_RESET=true`
+3. **Manual Deploy** (or push to GitHub)
+4. Wait for deploy — logs should show `Wiped database` and `fresh database loaded`
+5. **Remove** `SEED_RESET` and redeploy (important — otherwise it wipes on every restart)
 
-**Driver 1 (Area A) customers:**
-- Ramesh General Store
-- Patel Pan Shop
-- Meena Kirana
+---
 
-**Driver 2 (Area B) customers:**
-- Sharma Electronics
-- Gupta Medical Store
+## What gets wiped
 
-**Area C:** Singh Restaurant (no driver assigned — for testing owner assignment flow)
+The entire MongoDB database is dropped (`dropDatabase`), including:
 
-**Deliveries:** One completed today for Driver 1 (Ramesh); Patel and Meena still pending on today's route.
+- users, drivers, areas, customers, assignments
+- deliveries, invoices, payments, ledger
+- settlements, collections, expenses, inventory, audit logs
+
+---
+
+## What gets created (new sample data)
+
+| Data | Details |
+|------|---------|
+| **Areas** | Area A, B, C |
+| **Customers** | 9 shops (4 in A, 3 in B, 2 in C) |
+| **Assignments** | driver1 → Area A, driver2 → Area B |
+| **Deliveries** | 5 records (today + past days, incl. 1 skipped) |
+| **Inventory** | 1000 coolers, 800 in warehouse |
+| **Pricing** | ₹20 default |
+| **Invoice** | 1 unpaid invoice for Patel Pan Shop |
+| **Collection** | 1 unreconciled cash collection (driver1) |
+| **Expense** | 1 fuel expense sample |
+
+---
+
+## Atlas alternative
+
+MongoDB Atlas → **Browse Collections** → select database → **⋯** → **Drop Database**, then run `npm run db:reset` with that URI.

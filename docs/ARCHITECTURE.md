@@ -61,7 +61,7 @@ warehouseStock + customerHoldings = totalCoolersOwned
 | Field | Type | Notes |
 |-------|------|-------|
 | name | String | |
-| email | String | unique |
+| loginId | String | unique, used to sign in |
 | password | String | bcrypt hash |
 | role | enum | `owner`, `driver` |
 | driverProfile | ObjectId → drivers | if role=driver |

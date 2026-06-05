@@ -12,11 +12,11 @@ console.log('\nBackup security');
 const sanitized = sanitizeUserDoc({
   _id: '1',
   name: 'Test',
-  email: 't@t.com',
+  loginId: 'testowner',
   password: '$2a$10$hash',
   role: 'owner',
 });
 assert(sanitized.password === undefined, 'password excluded from export');
-assert(sanitized.email === 't@t.com', 'safe fields retained');
+assert(sanitized.loginId === 'testowner', 'safe fields retained');
 
 export { passed as backupPassed, failed as backupFailed };

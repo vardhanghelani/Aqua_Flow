@@ -24,7 +24,7 @@ const EXPORT_COLLECTIONS = [
 const USER_SAFE_FIELDS = {
   _id: 1,
   name: 1,
-  email: 1,
+  loginId: 1,
   role: 1,
   isActive: 1,
   driverProfile: 1,

@@ -2,7 +2,7 @@ export type UserRole = 'owner' | 'driver';
 
 export interface User {
   id: string;
-  email: string;
+  loginId: string;
   role: UserRole;
   name: string;
   driverId?: string;
@@ -20,7 +20,7 @@ export interface Driver {
   name: string;
   mobile: string;
   isActive: boolean;
-  userId?: { email: string; isActive: boolean };
+  userId?: { loginId: string; isActive: boolean };
 }
 
 export type AnalyticsStatus = 'active' | 'at_risk' | 'inactive';

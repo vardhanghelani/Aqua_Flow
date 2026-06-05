@@ -3,7 +3,7 @@ import { UserRole } from '../types';
 
 export interface IUser extends Document {
   name: string;
-  email: string;
+  loginId: string;
   password: string;
   role: UserRole;
   driverProfile?: Types.ObjectId;
@@ -17,7 +17,7 @@ export interface IUser extends Document {
 const userSchema = new Schema<IUser>(
   {
     name: { type: String, required: true, trim: true },
-    email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    loginId: { type: String, required: true, unique: true, lowercase: true, trim: true },
     password: { type: String, required: true },
     role: { type: String, enum: ['owner', 'driver'], required: true },
     driverProfile: { type: Schema.Types.ObjectId, ref: 'Driver' },
