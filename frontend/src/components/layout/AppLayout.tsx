@@ -4,6 +4,7 @@ import { Sidebar } from './Sidebar';
 import { TopNavbar } from './TopNavbar';
 import { MobileBottomNav } from './MobileBottomNav';
 import { useAuth } from '@/hooks/useAuth';
+import { DriverDataProvider } from '@/hooks/useDriverData';
 import { isBusinessUser } from '@/lib/auth-utils';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -46,7 +47,13 @@ export function AppLayout() {
 
         <main className={cn('flex-1 overflow-auto p-4 lg:p-6', isDriver && 'pb-20 lg:pb-6')}>
           <div className="erp-page">
-            <Outlet />
+            {isDriver ? (
+              <DriverDataProvider>
+                <Outlet />
+              </DriverDataProvider>
+            ) : (
+              <Outlet />
+            )}
           </div>
         </main>
       </div>

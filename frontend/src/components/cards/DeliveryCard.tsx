@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Check, X, MapPin, Package, Navigation, ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,7 +25,7 @@ interface DeliveryCardProps {
   onNext?: () => void;
 }
 
-export function DeliveryCard({
+export const DeliveryCard = memo(function DeliveryCard({
   customer,
   filledGiven,
   emptyReturned,
@@ -85,7 +86,7 @@ export function DeliveryCard({
           <Button
             variant="success"
             size="touch"
-            className="w-full text-base"
+            className={cn('w-full text-base', saving && 'opacity-70')}
             disabled={saving}
             onClick={(e) => {
               e.stopPropagation();
@@ -94,7 +95,7 @@ export function DeliveryCard({
             }}
           >
             <Check className="h-5 w-5" />
-            {saving ? 'Saving...' : 'Delivered'}
+            Delivered
           </Button>
         </div>
       )}
@@ -124,12 +125,12 @@ export function DeliveryCard({
                 <Button
                   variant="success"
                   size="touch"
-                  className="w-full text-base active:scale-[0.98] transition-transform"
+                  className={cn('w-full text-base active:scale-[0.98] transition-transform', saving && 'opacity-70')}
                   onClick={onDeliver}
                   disabled={saving}
                 >
                   <Check className="h-5 w-5" />
-                  {saving ? 'Saving...' : 'Save'}
+                  Save
                 </Button>
                 <Button
                   variant="outline"
@@ -173,5 +174,5 @@ export function DeliveryCard({
       )}
     </div>
   );
-}
+});
 

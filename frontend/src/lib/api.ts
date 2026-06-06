@@ -21,8 +21,19 @@ class ApiClient {
     };
     if (this.token) headers.Authorization = `Bearer ${this.token}`;
 
-    const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
-    const data = await res.json();
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+    } catch {
+      throw new Error('Network error — check your connection and try again');
+    }
+
+    let data: { message?: string; data?: T };
+    try {
+      data = await res.json();
+    } catch {
+      throw new Error(res.ok ? 'Invalid server response' : `Request failed (${res.status})`);
+    }
 
     if (!res.ok) {
       throw new Error(data.message || 'Request failed');

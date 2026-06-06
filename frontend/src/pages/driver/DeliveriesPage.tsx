@@ -5,7 +5,9 @@ import { api } from '@/lib/api';
 import type { TodayDeliveryItem } from '@/types';
 import { DeliveryCard } from '@/components/cards/DeliveryCard';
 import { EmptyState } from '@/components/feedback/EmptyState';
+import { DriverPageSkeleton } from '@/components/layout/DriverPageSkeleton';
 import { useToast } from '@/hooks/useToast';
+import { useDriverData } from '@/hooks/useDriverData';
 
 interface RowState {
   status: 'delivered' | 'not_delivered' | 'pending';
@@ -21,10 +23,28 @@ const defaultRow = (): RowState => ({
   remarks: '',
 });
 
+function buildRowsFromItems(data: TodayDeliveryItem[]) {
+  const initial: Record<string, RowState> = {};
+  data.forEach(({ customer, delivery }) => {
+    initial[customer._id] = {
+      status: delivery?.status ?? 'pending',
+      filledGiven: delivery?.filledGiven ?? 1,
+      emptyReturned: delivery?.emptyReturned ?? 1,
+      remarks: delivery?.remarks ?? '',
+    };
+  });
+  return initial;
+}
+
 export function DeliveriesPage() {
   const { toast } = useToast();
-  const [items, setItems] = useState<TodayDeliveryItem[]>([]);
-  const [summary, setSummary] = useState<Record<string, number | string> | null>(null);
+  const {
+    todayItems,
+    summary,
+    loadingToday,
+    patchCustomerAfterDelivery,
+    updateSummaryCounts,
+  } = useDriverData();
   const [rows, setRows] = useState<Record<string, RowState>>({});
   const [saving, setSaving] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -32,44 +52,32 @@ export function DeliveriesPage() {
   const [settlementBusy, setSettlementBusy] = useState(false);
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
-
-  const load = useCallback(() => {
-    api.getTodayDeliveries().then((data) => {
-      setItems(data);
-      const initial: Record<string, RowState> = {};
-      data.forEach(({ customer, delivery }) => {
-        initial[customer._id] = {
-          status: delivery?.status ?? 'pending',
-          filledGiven: delivery?.filledGiven ?? 1,
-          emptyReturned: delivery?.emptyReturned ?? 1,
-          remarks: delivery?.remarks ?? '',
-        };
-      });
-      setRows(initial);
-    });
-    api.getTodaySummary().then(setSummary);
-  }, []);
+  const rowsInitialized = useRef(false);
+  const items = todayItems ?? [];
 
   useEffect(() => {
-    load();
-    api.getTodayDeliveries().then((data) => {
-      const firstPending = data.find(({ delivery }) => (delivery?.status ?? 'pending') === 'pending');
-      if (firstPending) setExpandedId(firstPending.customer._id);
-    });
-  }, [load]);
+    if (!todayItems || rowsInitialized.current) return;
+    rowsInitialized.current = true;
+    setRows(buildRowsFromItems(todayItems));
+    const firstPending = todayItems.find(({ delivery }) => (delivery?.status ?? 'pending') === 'pending');
+    if (firstPending) setExpandedId(firstPending.customer._id);
+  }, [todayItems]);
 
   const updateRow = (id: string, patch: Partial<RowState>) => {
     setRows((prev) => ({ ...prev, [id]: { ...(prev[id] ?? defaultRow()), ...patch } }));
   };
 
-  const goToNextPending = useCallback((currentId: string, nextRows: Record<string, RowState>) => {
-    const idx = items.findIndex(({ customer }) => customer._id === currentId);
-    const next = items.slice(idx + 1).find(({ customer }) => {
-      const st = nextRows[customer._id]?.status ?? 'pending';
-      return st === 'pending';
-    });
-    setExpandedId(next ? next.customer._id : null);
-  }, [items]);
+  const goToNextPending = useCallback(
+    (currentId: string, nextRows: Record<string, RowState>) => {
+      const idx = items.findIndex(({ customer }) => customer._id === currentId);
+      const next = items.slice(idx + 1).find(({ customer }) => {
+        const st = nextRows[customer._id]?.status ?? 'pending';
+        return st === 'pending';
+      });
+      setExpandedId(next ? next.customer._id : null);
+    },
+    [items]
+  );
 
   const save = async (
     customerId: string,
@@ -88,33 +96,15 @@ export function DeliveriesPage() {
     updateRow(customerId, optimisticRow);
 
     if (wasPending) {
-      setSummary((prev) =>
-        prev
-          ? {
-              ...prev,
-              delivered: Number(prev.delivered) + (status === 'delivered' ? 1 : 0),
-              notDelivered: Number(prev.notDelivered) + (status === 'not_delivered' ? 1 : 0),
-              pending: Math.max(0, Number(prev.pending) - 1),
-            }
-          : prev
-      );
+      updateSummaryCounts({
+        delivered: status === 'delivered' ? 1 : 0,
+        notDelivered: status === 'not_delivered' ? 1 : 0,
+        pending: -1,
+      });
     }
 
     if (status === 'delivered') {
-      setItems((prev) =>
-        prev.map((item) =>
-          item.customer._id === customerId
-            ? {
-                ...item,
-                customer: {
-                  ...item.customer,
-                  currentBalance: item.customer.currentBalance + filledGiven - emptyReturned,
-                  lastDeliveryDate: new Date().toISOString(),
-                },
-              }
-            : item
-        )
-      );
+      patchCustomerAfterDelivery(customerId, { filledGiven, emptyReturned });
       goToNextPending(customerId, { ...rowsRef.current, [customerId]: optimisticRow });
     } else {
       setExpandedId(null);
@@ -132,16 +122,11 @@ export function DeliveriesPage() {
     } catch (err) {
       updateRow(customerId, prevRow);
       if (wasPending) {
-        setSummary((prev) =>
-          prev
-            ? {
-                ...prev,
-                delivered: Number(prev.delivered) - (status === 'delivered' ? 1 : 0),
-                notDelivered: Number(prev.notDelivered) - (status === 'not_delivered' ? 1 : 0),
-                pending: Number(prev.pending) + 1,
-              }
-            : prev
-        );
+        updateSummaryCounts({
+          delivered: status === 'delivered' ? -1 : 0,
+          notDelivered: status === 'not_delivered' ? -1 : 0,
+          pending: 1,
+        });
       }
       setExpandedId(customerId);
       toast(err instanceof Error ? err.message : 'Failed to save', 'error');
@@ -149,6 +134,10 @@ export function DeliveriesPage() {
       setSaving(null);
     }
   };
+
+  if (loadingToday && !todayItems) {
+    return <DriverPageSkeleton />;
+  }
 
   const total = Number(summary?.totalCustomers ?? 0);
   const delivered = Number(summary?.delivered ?? 0);

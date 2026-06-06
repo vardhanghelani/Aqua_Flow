@@ -48,6 +48,21 @@ function ProtectedRoute({ children, role }: { children: React.ReactNode; role?: 
   return <>{children}</>;
 }
 
+/** Role guard without re-showing the full-page loader on nested routes. */
+function DriverOnly({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role !== 'driver') return <Navigate to={businessHomePath(user)} replace />;
+  return <>{children}</>;
+}
+
+function BusinessOnly({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  if (!user) return <Navigate to="/login" replace />;
+  if (!isBusinessUser(user.role)) return <Navigate to="/driver/deliveries" replace />;
+  return <>{children}</>;
+}
+
 function AppRoutes() {
   const { user, loading } = useAuth();
   if (loading) return <LoadingScreen />;
@@ -60,27 +75,27 @@ function AppRoutes() {
       />
       <Route path="/provision" element={<ProvisionPage />} />
       <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-        <Route path="/dashboard" element={<ProtectedRoute role="business"><DashboardPage /></ProtectedRoute>} />
-        <Route path="/customers" element={<ProtectedRoute role="business"><CustomersPage /></ProtectedRoute>} />
-        <Route path="/customers/:id" element={<ProtectedRoute role="business"><CustomerDetailPage /></ProtectedRoute>} />
-        <Route path="/payments" element={<ProtectedRoute role="business"><PaymentsPage /></ProtectedRoute>} />
-        <Route path="/settlements" element={<ProtectedRoute role="business"><SettlementsPage /></ProtectedRoute>} />
-        <Route path="/collections" element={<ProtectedRoute role="business"><CollectionsPage /></ProtectedRoute>} />
-        <Route path="/expenses" element={<ProtectedRoute role="business"><ExpensesPage /></ProtectedRoute>} />
-        <Route path="/drivers/:id/performance" element={<ProtectedRoute role="business"><DriverPerformancePage /></ProtectedRoute>} />
-        <Route path="/areas" element={<ProtectedRoute role="business"><AreasPage /></ProtectedRoute>} />
-        <Route path="/drivers" element={<ProtectedRoute role="business"><DriversPage /></ProtectedRoute>} />
-        <Route path="/assignments" element={<ProtectedRoute role="business"><AssignmentsPage /></ProtectedRoute>} />
-        <Route path="/deliveries" element={<ProtectedRoute role="business"><OwnerDeliveriesPage /></ProtectedRoute>} />
-        <Route path="/inventory" element={<ProtectedRoute role="business"><InventoryPage /></ProtectedRoute>} />
-        <Route path="/invoices" element={<ProtectedRoute role="business"><InvoicesPage /></ProtectedRoute>} />
-        <Route path="/reports" element={<ProtectedRoute role="business"><ReportsPage /></ProtectedRoute>} />
-        <Route path="/settings" element={<ProtectedRoute role="business"><SettingsPage /></ProtectedRoute>} />
+        <Route path="/dashboard" element={<BusinessOnly><DashboardPage /></BusinessOnly>} />
+        <Route path="/customers" element={<BusinessOnly><CustomersPage /></BusinessOnly>} />
+        <Route path="/customers/:id" element={<BusinessOnly><CustomerDetailPage /></BusinessOnly>} />
+        <Route path="/payments" element={<BusinessOnly><PaymentsPage /></BusinessOnly>} />
+        <Route path="/settlements" element={<BusinessOnly><SettlementsPage /></BusinessOnly>} />
+        <Route path="/collections" element={<BusinessOnly><CollectionsPage /></BusinessOnly>} />
+        <Route path="/expenses" element={<BusinessOnly><ExpensesPage /></BusinessOnly>} />
+        <Route path="/drivers/:id/performance" element={<BusinessOnly><DriverPerformancePage /></BusinessOnly>} />
+        <Route path="/areas" element={<BusinessOnly><AreasPage /></BusinessOnly>} />
+        <Route path="/drivers" element={<BusinessOnly><DriversPage /></BusinessOnly>} />
+        <Route path="/assignments" element={<BusinessOnly><AssignmentsPage /></BusinessOnly>} />
+        <Route path="/deliveries" element={<BusinessOnly><OwnerDeliveriesPage /></BusinessOnly>} />
+        <Route path="/inventory" element={<BusinessOnly><InventoryPage /></BusinessOnly>} />
+        <Route path="/invoices" element={<BusinessOnly><InvoicesPage /></BusinessOnly>} />
+        <Route path="/reports" element={<BusinessOnly><ReportsPage /></BusinessOnly>} />
+        <Route path="/settings" element={<BusinessOnly><SettingsPage /></BusinessOnly>} />
         {/* Legacy redirects */}
         <Route path="/pricing" element={<Navigate to="/settings" replace />} />
         <Route path="/audit" element={<Navigate to="/settings" replace />} />
-        <Route path="/driver/deliveries" element={<ProtectedRoute role="driver"><DeliveriesPage /></ProtectedRoute>} />
-        <Route path="/driver/history" element={<ProtectedRoute role="driver"><HistoryPage /></ProtectedRoute>} />
+        <Route path="/driver/deliveries" element={<DriverOnly><DeliveriesPage /></DriverOnly>} />
+        <Route path="/driver/history" element={<DriverOnly><HistoryPage /></DriverOnly>} />
       </Route>
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>

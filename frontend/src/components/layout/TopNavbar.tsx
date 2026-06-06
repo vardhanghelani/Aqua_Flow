@@ -1,4 +1,4 @@
-import { Bell, Search, Menu } from 'lucide-react';
+import { Bell, Search, Menu, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { SearchBar } from '@/components/data/SearchBar';
@@ -11,8 +11,9 @@ interface TopNavbarProps {
 }
 
 export function TopNavbar({ onMenuClick, alertCount = 0, showSearch = true }: TopNavbarProps) {
-  const { user } = useAuth();
-  const navigate = useNavigate();  const [search, setSearch] = useState('');
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const [search, setSearch] = useState('');
   const isDriver = user?.role === 'driver';
 
   const handleSearch = (value: string) => {
@@ -20,6 +21,11 @@ export function TopNavbar({ onMenuClick, alertCount = 0, showSearch = true }: To
     if (value.trim().length >= 2) {
       navigate(`/customers?search=${encodeURIComponent(value.trim())}`);
     }
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login', { replace: true });
   };
 
   return (
@@ -77,6 +83,18 @@ export function TopNavbar({ onMenuClick, alertCount = 0, showSearch = true }: To
               <p className="text-xs capitalize text-muted-foreground">{user?.role}</p>
             </div>
           </div>
+        )}
+
+        {isDriver && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="hidden shrink-0 gap-1.5 text-muted-foreground hover:text-destructive sm:inline-flex"
+            onClick={handleLogout}
+          >
+            <LogOut className="h-4 w-4" />
+            Logout
+          </Button>
         )}
       </div>
     </header>
