@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { body, param } from 'express-validator';
-import { authenticate, authorize } from '../middleware/auth';
+import { authenticate, authorizeBusiness } from '../middleware/auth';
+import { requireOrganization } from '../middleware/organization';
 import { validate } from '../middleware/validate';
 import * as paymentService from '../services/payment.service';
 import { logAudit } from '../middleware/audit';
@@ -8,20 +9,21 @@ import { AuthRequest } from '../types';
 
 const router = Router();
 
-router.use(authenticate, authorize('owner'));
+router.use(authenticate, requireOrganization, authorizeBusiness());
 
-router.get('/summary', async (_req, res, next) => {
+router.get('/summary', async (req: AuthRequest, res, next) => {
   try {
-    const data = await paymentService.getPaymentSummary();
+    const data = await paymentService.getPaymentSummary(req.user!.organizationId!);
     res.json({ success: true, data });
   } catch (err) {
     next(err);
   }
 });
 
-router.get('/', async (req, res, next) => {
+router.get('/', async (req: AuthRequest, res, next) => {
   try {
     const data = await paymentService.listPayments({
+      organizationId: req.user!.organizationId!,
       customerId: req.query.customerId as string,
       invoiceId: req.query.invoiceId as string,
       from: req.query.from as string,
@@ -45,6 +47,7 @@ router.post(
     try {
       const payment = await paymentService.recordPayment({
         ...req.body,
+        organizationId: req.user!.organizationId!,
         userId: req.user!.id,
       });
       await logAudit(req, 'create', 'Payment', payment._id.toString(), req.body);

@@ -1,6 +1,7 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
 
 export interface IPriceHistory extends Document {
+  organizationId?: Types.ObjectId;
   price: number;
   effectiveFrom: Date;
   effectiveTo?: Date;
@@ -11,6 +12,7 @@ export interface IPriceHistory extends Document {
 
 const priceHistorySchema = new Schema<IPriceHistory>(
   {
+    organizationId: { type: Schema.Types.ObjectId, ref: 'Organization', index: true },
     price: { type: Number, required: true, min: 0 },
     effectiveFrom: { type: Date, required: true, default: Date.now },
     effectiveTo: { type: Date },

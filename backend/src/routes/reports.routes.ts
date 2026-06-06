@@ -1,41 +1,44 @@
 import { Router } from 'express';
-import { authenticate, authorize } from '../middleware/auth';
+import { authenticate, authorizeBusiness } from '../middleware/auth';
+import { requireOrganization } from '../middleware/organization';
+import { AuthRequest } from '../types';
 import * as reportsService from '../services/reports.service';
 
 const router = Router();
 
-router.use(authenticate, authorize('owner'));
+router.use(authenticate, requireOrganization, authorizeBusiness());
 
-router.get('/customers', async (_req, res, next) => {
+router.get('/customers', async (req: AuthRequest, res, next) => {
   try {
-    const data = await reportsService.getCustomerReports();
+    const data = await reportsService.getCustomerReports(req.user!.organizationId!);
     res.json({ success: true, data });
   } catch (err) {
     next(err);
   }
 });
 
-router.get('/areas', async (_req, res, next) => {
+router.get('/areas', async (req: AuthRequest, res, next) => {
   try {
-    const data = await reportsService.getAreaReports();
+    const data = await reportsService.getAreaReports(req.user!.organizationId!);
     res.json({ success: true, data });
   } catch (err) {
     next(err);
   }
 });
 
-router.get('/drivers', async (_req, res, next) => {
+router.get('/drivers', async (req: AuthRequest, res, next) => {
   try {
-    const data = await reportsService.getDriverReports();
+    const data = await reportsService.getDriverReports(req.user!.organizationId!);
     res.json({ success: true, data });
   } catch (err) {
     next(err);
   }
 });
 
-router.get('/payments', async (req, res, next) => {
+router.get('/payments', async (req: AuthRequest, res, next) => {
   try {
     const data = await reportsService.getPaymentReports(
+      req.user!.organizationId!,
       req.query.from as string,
       req.query.to as string
     );
@@ -45,9 +48,9 @@ router.get('/payments', async (req, res, next) => {
   }
 });
 
-router.get('/inventory', async (_req, res, next) => {
+router.get('/inventory', async (req: AuthRequest, res, next) => {
   try {
-    const data = await reportsService.getInventoryReports();
+    const data = await reportsService.getInventoryReports(req.user!.organizationId!);
     res.json({ success: true, data });
   } catch (err) {
     next(err);

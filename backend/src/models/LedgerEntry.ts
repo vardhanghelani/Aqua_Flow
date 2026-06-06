@@ -11,6 +11,7 @@ export type LedgerEntryType =
   | 'invoice_void';
 
 export interface ILedgerEntry extends Document {
+  organizationId?: Types.ObjectId;
   customerId: Types.ObjectId;
   date: Date;
   particular: string;
@@ -26,6 +27,7 @@ export interface ILedgerEntry extends Document {
 
 const ledgerEntrySchema = new Schema<ILedgerEntry>(
   {
+    organizationId: { type: Schema.Types.ObjectId, ref: 'Organization', index: true },
     customerId: { type: Schema.Types.ObjectId, ref: 'Customer', required: true, index: true },
     date: { type: Date, required: true },
     particular: { type: String, required: true, trim: true },

@@ -8,6 +8,7 @@ import { ApiError } from '../utils/apiError';
 import { logAudit } from '../middleware/audit';
 import { notDeletedFilter, softDeleteDoc } from '../utils/softDelete';
 import { pickFields } from '../utils/sanitize';
+import { withOrg, assertBelongsToOrg } from '../utils/organization';
 
 const AREA_UPDATE_FIELDS = ['name', 'description', 'isActive'] as const;
 const DRIVER_UPDATE_FIELDS = ['name', 'mobile', 'isActive'] as const;
@@ -23,7 +24,7 @@ export const areaValidation = [body('name').notEmpty().withMessage('Area name re
 export async function listAreas(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const includeDeleted = req.query.includeDeleted === 'true';
-    const areas = await Area.find(notDeletedFilter(includeDeleted)).sort({ name: 1 });
+    const areas = await Area.find({ ...withOrg(req, notDeletedFilter(includeDeleted)) }).sort({ name: 1 });
     res.json({ success: true, data: areas });
   } catch (err) {
     next(err);
@@ -34,6 +35,7 @@ export async function createArea(req: AuthRequest, res: Response, next: NextFunc
   try {
     const area = await Area.create({
       ...pickFields(req.body, AREA_UPDATE_FIELDS),
+      organizationId: withOrg(req).organizationId,
       createdBy: req.user!.id,
     });
     await logAudit(req, 'create', 'Area', area._id.toString(), req.body);
@@ -45,6 +47,8 @@ export async function createArea(req: AuthRequest, res: Response, next: NextFunc
 
 export async function updateArea(req: AuthRequest, res: Response, next: NextFunction) {
   try {
+    const existing = await Area.findOne(withOrg(req, { _id: req.params.id }));
+    await assertBelongsToOrg(req, existing, 'Area');
     const area = await Area.findByIdAndUpdate(
       req.params.id,
       { ...pickFields(req.body, AREA_UPDATE_FIELDS), updatedBy: req.user!.id },
@@ -60,10 +64,14 @@ export async function updateArea(req: AuthRequest, res: Response, next: NextFunc
 
 export async function deleteArea(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    const customers = await Customer.countDocuments({ areaId: req.params.id, ...notDeletedFilter() });
-    if (customers > 0) throw new ApiError(400, 'Cannot delete area with active customers');
-    const area = await Area.findById(req.params.id);
+    const area = await Area.findOne(withOrg(req, { _id: req.params.id }));
     if (!area || area.deletedAt) throw new ApiError(404, 'Area not found');
+    const customers = await Customer.countDocuments({
+      areaId: req.params.id,
+      organizationId: withOrg(req).organizationId,
+      ...notDeletedFilter(),
+    });
+    if (customers > 0) throw new ApiError(400, 'Cannot delete area with active customers');
     await softDeleteDoc(area, req.user!.id);
     await logAudit(req, 'delete', 'Area', req.params.id);
     res.json({ success: true, message: 'Area archived' });
@@ -91,7 +99,7 @@ export const driverUpdateValidation = [
 export async function listDrivers(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const includeDeleted = req.query.includeDeleted === 'true';
-    const drivers = await Driver.find(notDeletedFilter(includeDeleted))
+    const drivers = await Driver.find(withOrg(req, notDeletedFilter(includeDeleted)))
       .populate('userId', 'loginId isActive')
       .sort({ name: 1 });
     res.json({ success: true, data: drivers });
@@ -103,6 +111,7 @@ export async function listDrivers(req: AuthRequest, res: Response, next: NextFun
 export async function createDriver(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const { name, mobile, loginId, password } = req.body;
+    const orgId = withOrg(req).organizationId;
     let userId;
 
     if (loginId && password) {
@@ -115,6 +124,7 @@ export async function createDriver(req: AuthRequest, res: Response, next: NextFu
         loginId: normalized,
         password: hashed,
         role: 'driver',
+        organizationId: orgId,
         createdBy: req.user!.id,
       });
       userId = user._id;
@@ -124,6 +134,7 @@ export async function createDriver(req: AuthRequest, res: Response, next: NextFu
       name,
       mobile,
       userId,
+      organizationId: orgId,
       createdBy: req.user!.id,
     });
 
@@ -140,7 +151,7 @@ export async function createDriver(req: AuthRequest, res: Response, next: NextFu
 
 export async function updateDriver(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    const driver = await Driver.findById(req.params.id);
+    const driver = await Driver.findOne(withOrg(req, { _id: req.params.id }));
     if (!driver || driver.deletedAt) throw new ApiError(404, 'Driver not found');
 
     const { loginId, password } = req.body;
@@ -175,6 +186,7 @@ export async function updateDriver(req: AuthRequest, res: Response, next: NextFu
         loginId: normalized,
         password: await bcrypt.hash(String(password), 10),
         role: 'driver',
+        organizationId: driver.organizationId ?? withOrg(req).organizationId,
         createdBy: req.user!.id,
       });
       driver.userId = user._id;
@@ -193,7 +205,7 @@ export async function updateDriver(req: AuthRequest, res: Response, next: NextFu
 
 export async function deleteDriver(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    const driver = await Driver.findById(req.params.id);
+    const driver = await Driver.findOne(withOrg(req, { _id: req.params.id }));
     if (!driver || driver.deletedAt) throw new ApiError(404, 'Driver not found');
 
     await DriverAreaAssignment.updateMany(
@@ -227,7 +239,7 @@ export const customerValidation = [
 export async function listCustomers(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const includeDeleted = req.query.includeDeleted === 'true';
-    const query: Record<string, unknown> = { ...notDeletedFilter(includeDeleted) };
+    const query: Record<string, unknown> = { ...withOrg(req, notDeletedFilter(includeDeleted)) };
     if (req.query.areaId) query.areaId = req.query.areaId;
     if (req.query.status) query.status = req.query.status;
 
@@ -240,8 +252,11 @@ export async function listCustomers(req: AuthRequest, res: Response, next: NextF
 
 export async function createCustomer(req: AuthRequest, res: Response, next: NextFunction) {
   try {
+    const area = await Area.findOne(withOrg(req, { _id: req.body.areaId }));
+    if (!area) throw new ApiError(400, 'Invalid area for this business');
     const customer = await Customer.create({
       ...pickFields(req.body, CUSTOMER_CREATE_FIELDS),
+      organizationId: withOrg(req).organizationId,
       createdBy: req.user!.id,
     });
     await logAudit(req, 'create', 'Customer', customer._id.toString(), req.body);
@@ -253,6 +268,12 @@ export async function createCustomer(req: AuthRequest, res: Response, next: Next
 
 export async function updateCustomer(req: AuthRequest, res: Response, next: NextFunction) {
   try {
+    const existing = await Customer.findOne(withOrg(req, { _id: req.params.id }));
+    await assertBelongsToOrg(req, existing, 'Customer');
+    if (req.body.areaId) {
+      const area = await Area.findOne(withOrg(req, { _id: req.body.areaId }));
+      if (!area) throw new ApiError(400, 'Invalid area for this business');
+    }
     const customer = await Customer.findByIdAndUpdate(
       req.params.id,
       { ...pickFields(req.body, CUSTOMER_UPDATE_FIELDS), updatedBy: req.user!.id },
@@ -268,7 +289,7 @@ export async function updateCustomer(req: AuthRequest, res: Response, next: Next
 
 export async function deleteCustomer(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    const customer = await Customer.findById(req.params.id);
+    const customer = await Customer.findOne(withOrg(req, { _id: req.params.id }));
     if (!customer || customer.deletedAt) throw new ApiError(404, 'Customer not found');
     customer.status = 'inactive';
     await softDeleteDoc(customer, req.user!.id);
@@ -281,7 +302,7 @@ export async function deleteCustomer(req: AuthRequest, res: Response, next: Next
 
 export async function getCustomerById(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    const customer = await Customer.findById(req.params.id).populate('areaId', 'name');
+    const customer = await Customer.findOne(withOrg(req, { _id: req.params.id })).populate('areaId', 'name');
     if (!customer) throw new ApiError(404, 'Customer not found');
     res.json({ success: true, data: customer });
   } catch (err) {
@@ -292,7 +313,7 @@ export async function getCustomerById(req: AuthRequest, res: Response, next: Nex
 export async function getCustomerAnalytics(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const { computeCustomerAnalytics } = await import('../services/customerAnalytics.service');
-    const data = await computeCustomerAnalytics(req.params.id);
+    const data = await computeCustomerAnalytics(req.params.id, req.user!.organizationId!);
     if (!data) throw new ApiError(404, 'Customer not found');
     res.json({ success: true, data });
   } catch (err) {

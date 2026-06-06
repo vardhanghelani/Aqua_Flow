@@ -1,11 +1,12 @@
 import { Router } from 'express';
-import { authenticate, authorize } from '../middleware/auth';
+import { authenticate, authorizeBusiness } from '../middleware/auth';
+import { requireOrganization } from '../middleware/organization';
 import { validate } from '../middleware/validate';
 import * as ctrl from '../controllers/delivery.controller';
 
 const router = Router();
 
-router.use(authenticate);
+router.use(authenticate, requireOrganization);
 
 router.get('/today', ctrl.today);
 router.get('/summary/today', ctrl.summary);

@@ -5,6 +5,7 @@ import { ApiError } from '../utils/apiError';
 import { recordPaymentEntry } from './ledger.service';
 import { startOfDay } from '../utils/date';
 import { withTransaction } from '../utils/transaction';
+import { assertInvoiceInOrg, tenantFilter } from '../utils/tenant';
 
 function normalizeInvoiceStatus(invoice: { amountPaid: number; totalAmount: number; amountDue: number }) {
   if (invoice.amountPaid >= invoice.totalAmount) return 'paid';
@@ -13,6 +14,7 @@ function normalizeInvoiceStatus(invoice: { amountPaid: number; totalAmount: numb
 }
 
 export async function recordPayment(input: {
+  organizationId: string;
   invoiceId: string;
   amount: number;
   paymentDate?: string | Date;
@@ -25,7 +27,9 @@ export async function recordPayment(input: {
   settlementId?: string;
 }) {
   return withTransaction(async (session) => {
-    const invoice = await Invoice.findById(input.invoiceId).session(session ?? null);
+    const invoice = await Invoice.findOne(
+      tenantFilter(input.organizationId, { _id: input.invoiceId })
+    ).session(session ?? null);
     if (!invoice) throw new ApiError(404, 'Invoice not found');
     if (invoice.status === 'void') throw new ApiError(400, 'Cannot pay a voided invoice');
 
@@ -37,6 +41,7 @@ export async function recordPayment(input: {
     const [payment] = await Payment.create(
       [
         {
+          organizationId: invoice.organizationId,
           invoiceId: invoice._id,
           customerId: invoice.customerId,
           driverId: input.driverId ? new Types.ObjectId(input.driverId) : undefined,
@@ -73,6 +78,7 @@ export async function recordPayment(input: {
 }
 
 export async function listPayments(filters: {
+  organizationId: string;
   customerId?: string;
   invoiceId?: string;
   from?: string;
@@ -80,7 +86,7 @@ export async function listPayments(filters: {
   page?: number;
   limit?: number;
 }) {
-  const query: Record<string, unknown> = {};
+  const query: Record<string, unknown> = tenantFilter(filters.organizationId);
   if (filters.customerId) query.customerId = new Types.ObjectId(filters.customerId);
   if (filters.invoiceId) query.invoiceId = new Types.ObjectId(filters.invoiceId);
   if (filters.from || filters.to) {
@@ -107,30 +113,34 @@ export async function listPayments(filters: {
   return { items, total, page, limit };
 }
 
-export async function getPaymentSummary() {
+export async function getPaymentSummary(organizationId: string) {
+  if (!organizationId) throw new ApiError(403, 'Organization context required');
   const today = startOfDay();
+  const orgMatch = tenantFilter(organizationId);
 
   const [outstanding, paidAgg, recentPayments, overdueCount] = await Promise.all([
     Invoice.aggregate([
-      { $match: { status: { $in: ['unpaid', 'partially_paid', 'pending'] } } },
+      { $match: { ...orgMatch, status: { $in: ['unpaid', 'partially_paid', 'pending'] } } },
       { $group: { _id: null, total: { $sum: '$amountDue' }, count: { $sum: 1 } } },
     ]),
     Payment.aggregate([
+      { $match: orgMatch },
       { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } },
     ]),
-    Payment.find()
+    Payment.find(orgMatch)
       .populate('customerId', 'shopName')
       .populate('invoiceId', 'invoiceNumber')
       .sort({ paymentDate: -1 })
       .limit(10),
     Invoice.countDocuments({
+      ...orgMatch,
       status: { $in: ['unpaid', 'partially_paid', 'pending'] },
       dueDate: { $lt: today },
     }),
   ]);
 
   const unpaidInvoices = await Invoice.aggregate([
-    { $match: { status: { $in: ['unpaid', 'partially_paid', 'pending'] } } },
+    { $match: { ...orgMatch, status: { $in: ['unpaid', 'partially_paid', 'pending'] } } },
     { $group: { _id: null, total: { $sum: '$totalAmount' }, paid: { $sum: '$amountPaid' } } },
   ]);
 

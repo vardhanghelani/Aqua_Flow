@@ -3,6 +3,7 @@ import mongoose, { Document, Schema, Types } from 'mongoose';
 export type AuditAction = 'create' | 'update' | 'delete';
 
 export interface IAuditLog extends Document {
+  organizationId?: Types.ObjectId;
   userId?: Types.ObjectId;
   action: AuditAction;
   entityType: string;
@@ -16,6 +17,7 @@ export interface IAuditLog extends Document {
 
 const auditLogSchema = new Schema<IAuditLog>(
   {
+    organizationId: { type: Schema.Types.ObjectId, ref: 'Organization', index: true },
     userId: { type: Schema.Types.ObjectId, ref: 'User' },
     action: { type: String, enum: ['create', 'update', 'delete'], required: true },
     entityType: { type: String, required: true },

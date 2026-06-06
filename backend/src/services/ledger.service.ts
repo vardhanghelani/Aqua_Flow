@@ -2,6 +2,7 @@ import { LedgerEntry, Customer, Delivery, Invoice } from '../models';
 import { LedgerEntryType } from '../models/LedgerEntry';
 import mongoose, { Types } from 'mongoose';
 import { parseDateOnly, endOfDay } from '../utils/date';
+import { assertCustomerInOrg, tenantFilter } from '../utils/tenant';
 
 interface CreateLedgerInput {
   customerId: string;
@@ -26,6 +27,7 @@ export async function createLedgerEntry(input: CreateLedgerInput, session?: mong
   const [entry] = await LedgerEntry.create(
     [
       {
+        organizationId: customer.organizationId,
         customerId: customer._id,
         date: input.date,
         particular: input.particular,
@@ -80,11 +82,13 @@ export async function recordReversalEntry(
 
 export async function getCustomerLedger(
   customerId: string,
+  organizationId: string,
   filters?: { from?: string; to?: string; page?: number; limit?: number }
 ) {
-  const query: Record<string, unknown> = {
+  await assertCustomerInOrg(customerId, organizationId);
+  const query: Record<string, unknown> = tenantFilter(organizationId, {
     customerId: new Types.ObjectId(customerId),
-  };
+  });
 
   if (filters?.from || filters?.to) {
     query.date = {};
@@ -99,7 +103,7 @@ export async function getCustomerLedger(
   const [items, total, customer] = await Promise.all([
     LedgerEntry.find(query).sort({ date: 1, createdAt: 1 }).skip(skip).limit(limit),
     LedgerEntry.countDocuments(query),
-    Customer.findById(customerId).select('name shopName mobile ledgerBalance'),
+    Customer.findOne(tenantFilter(organizationId, { _id: customerId })).select('name shopName mobile ledgerBalance'),
   ]);
 
   return { customer, items, total, page, limit };

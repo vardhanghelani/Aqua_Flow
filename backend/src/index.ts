@@ -29,6 +29,7 @@ import collectionsRoutes from './routes/collections.routes';
 import expensesRoutes from './routes/expenses.routes';
 import backupRoutes from './routes/backup.routes';
 import restoreRoutes from './routes/restore.routes';
+import provisionRoutes from './routes/provision.routes';
 
 validateEnvironment();
 
@@ -53,6 +54,7 @@ app.get('/api/health', async (_req, res) => {
 
 app.use('/api/auth/login', loginRateLimiter);
 app.use('/api/auth', authRoutes);
+app.use('/api/provision', provisionRoutes);
 app.use('/api/areas', areasRoutes);
 app.use('/api/drivers', driversRoutes);
 app.use('/api/customers', customersRoutes);
@@ -79,7 +81,10 @@ app.use(errorHandler);
 async function start() {
   await connectDatabase();
 
-    if (process.env.SEED_IF_EMPTY === 'true') {
+  const { runOrganizationBootstrap } = await import('./services/organization.service');
+  await runOrganizationBootstrap();
+
+  if (process.env.SEED_IF_EMPTY === 'true') {
     const { runSeed } = await import('./services/seed.service');
     await runSeed({ wipe: false });
   }

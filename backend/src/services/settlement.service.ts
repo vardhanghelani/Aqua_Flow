@@ -2,6 +2,7 @@ import { Types } from 'mongoose';
 import { Delivery, DriverDailySettlement, DriverCollection, CoolerTransaction } from '../models';
 import { ApiError } from '../utils/apiError';
 import { parseDateOnly, startOfDay, endOfDay } from '../utils/date';
+import { assertDriverInOrg, assertSettlementInOrg, tenantFilter } from '../utils/tenant';
 
 function calcExpectedClosing(s: {
   openingStock: number;
@@ -46,6 +47,7 @@ export async function autoPopulateFromDeliveries(driverId: string, settlementDat
 }
 
 export async function upsertSettlement(input: {
+  organizationId: string;
   driverId: string;
   settlementDate: string | Date;
   openingStock?: number;
@@ -59,10 +61,13 @@ export async function upsertSettlement(input: {
   areaId?: string;
   userId: string;
 }) {
+  await assertDriverInOrg(input.driverId, input.organizationId);
   const settlementDate = parseDateOnly(input.settlementDate);
   const existing = await DriverDailySettlement.findOne({
-    driverId: new Types.ObjectId(input.driverId),
-    settlementDate,
+    ...tenantFilter(input.organizationId, {
+      driverId: new Types.ObjectId(input.driverId),
+      settlementDate,
+    }),
   });
 
   if (existing && !['draft', 'rejected'].includes(existing.status)) {
@@ -120,13 +125,13 @@ export async function upsertSettlement(input: {
 
   return DriverDailySettlement.create({
     ...payload,
+    organizationId: new Types.ObjectId(input.organizationId),
     createdBy: new Types.ObjectId(input.userId),
   });
 }
 
-export async function submitSettlement(id: string, userId: string) {
-  const settlement = await DriverDailySettlement.findById(id);
-  if (!settlement) throw new ApiError(404, 'Settlement not found');
+export async function submitSettlement(id: string, userId: string, organizationId: string) {
+  const settlement = await assertSettlementInOrg(id, organizationId);
   if (!['draft', 'rejected'].includes(settlement.status)) {
     throw new ApiError(400, 'Settlement cannot be submitted');
   }
@@ -136,9 +141,8 @@ export async function submitSettlement(id: string, userId: string) {
   return settlement.save();
 }
 
-export async function approveSettlement(id: string, userId: string) {
-  const settlement = await DriverDailySettlement.findById(id);
-  if (!settlement) throw new ApiError(404, 'Settlement not found');
+export async function approveSettlement(id: string, userId: string, organizationId: string) {
+  const settlement = await assertSettlementInOrg(id, organizationId);
   if (settlement.status !== 'submitted') throw new ApiError(400, 'Only submitted settlements can be approved');
   settlement.status = 'approved';
   settlement.approvedBy = new Types.ObjectId(userId);
@@ -147,9 +151,8 @@ export async function approveSettlement(id: string, userId: string) {
   return settlement.save();
 }
 
-export async function rejectSettlement(id: string, userId: string, reason?: string) {
-  const settlement = await DriverDailySettlement.findById(id);
-  if (!settlement) throw new ApiError(404, 'Settlement not found');
+export async function rejectSettlement(id: string, userId: string, organizationId: string, reason?: string) {
+  const settlement = await assertSettlementInOrg(id, organizationId);
   if (settlement.status !== 'submitted') throw new ApiError(400, 'Only submitted settlements can be rejected');
   settlement.status = 'rejected';
   settlement.rejectedReason = reason;
@@ -158,6 +161,7 @@ export async function rejectSettlement(id: string, userId: string, reason?: stri
 }
 
 export async function listSettlements(filters: {
+  organizationId: string;
   driverId?: string;
   status?: string;
   from?: string;
@@ -165,7 +169,7 @@ export async function listSettlements(filters: {
   page?: number;
   limit?: number;
 }) {
-  const query: Record<string, unknown> = {};
+  const query: Record<string, unknown> = tenantFilter(filters.organizationId);
   if (filters.driverId) query.driverId = new Types.ObjectId(filters.driverId);
   if (filters.status) query.status = filters.status;
   if (filters.from || filters.to) {
@@ -191,8 +195,8 @@ export async function listSettlements(filters: {
   return { items, total, page, limit };
 }
 
-export async function getSettlementById(id: string) {
-  const settlement = await DriverDailySettlement.findById(id)
+export async function getSettlementById(id: string, organizationId: string) {
+  const settlement = await DriverDailySettlement.findOne(tenantFilter(organizationId, { _id: id }))
     .populate('driverId', 'name mobile')
     .populate('approvedBy', 'name');
   if (!settlement) throw new ApiError(404, 'Settlement not found');

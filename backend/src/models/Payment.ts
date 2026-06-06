@@ -3,6 +3,7 @@ import mongoose, { Document, Schema, Types } from 'mongoose';
 export type PaymentMethod = 'cash' | 'upi' | 'bank' | 'cheque' | 'other';
 
 export interface IPayment extends Document {
+  organizationId?: Types.ObjectId;
   invoiceId: Types.ObjectId;
   customerId: Types.ObjectId;
   driverId?: Types.ObjectId;
@@ -20,6 +21,7 @@ export interface IPayment extends Document {
 
 const paymentSchema = new Schema<IPayment>(
   {
+    organizationId: { type: Schema.Types.ObjectId, ref: 'Organization', index: true },
     invoiceId: { type: Schema.Types.ObjectId, ref: 'Invoice', required: true, index: true },
     customerId: { type: Schema.Types.ObjectId, ref: 'Customer', required: true, index: true },
     driverId: { type: Schema.Types.ObjectId, ref: 'Driver' },

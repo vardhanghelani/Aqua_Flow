@@ -14,7 +14,8 @@ export async function assign(req: AuthRequest, res: Response, next: NextFunction
     const assignment = await assignmentService.assignDriverToArea(
       req.body.driverId,
       req.body.areaId,
-      req.user!.id
+      req.user!.id,
+      req.user!.organizationId!
     );
     await logAudit(req, 'create', 'DriverAreaAssignment', assignment._id.toString(), req.body);
     res.status(201).json({ success: true, data: assignment });
@@ -26,6 +27,7 @@ export async function assign(req: AuthRequest, res: Response, next: NextFunction
 export async function list(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const assignments = await assignmentService.getAssignmentHistory({
+      organizationId: req.user!.organizationId,
       driverId: req.query.driverId as string,
       areaId: req.query.areaId as string,
       from: req.query.from ? new Date(req.query.from as string) : undefined,
@@ -40,7 +42,11 @@ export async function list(req: AuthRequest, res: Response, next: NextFunction) 
 export async function active(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const { DriverAreaAssignment } = await import('../models');
-    const assignments = await DriverAreaAssignment.find({ isActive: true })
+    const { Types } = await import('mongoose');
+    const assignments = await DriverAreaAssignment.find({
+      isActive: true,
+      organizationId: new Types.ObjectId(req.user!.organizationId!),
+    })
       .populate('driverId', 'name mobile')
       .populate('areaId', 'name')
       .populate('assignedBy', 'name');

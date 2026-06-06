@@ -12,6 +12,7 @@ export interface IInvoiceItem {
 }
 
 export interface IInvoice extends Document {
+  organizationId?: Types.ObjectId;
   invoiceNumber: string;
   customerId: Types.ObjectId;
   periodStart: Date;
@@ -42,6 +43,7 @@ const invoiceItemSchema = new Schema<IInvoiceItem>(
 
 const invoiceSchema = new Schema<IInvoice>(
   {
+    organizationId: { type: Schema.Types.ObjectId, ref: 'Organization', index: true },
     invoiceNumber: { type: String, required: true, unique: true },
     customerId: { type: Schema.Types.ObjectId, ref: 'Customer', required: true },
     periodStart: { type: Date, required: true },

@@ -1,4 +1,5 @@
 import { Customer, Invoice, InventorySettings } from '../models';
+import { Types } from 'mongoose';
 import { getInventorySnapshot } from './inventory.service';
 
 const EXCESSIVE_COOLER_THRESHOLD = 10;
@@ -13,11 +14,13 @@ export interface Alert {
   entityName?: string;
 }
 
-export async function getAlerts(): Promise<Alert[]> {
+export async function getAlerts(organizationId?: string): Promise<Alert[]> {
   const alerts: Alert[] = [];
   const now = Date.now();
+  const orgMatch = organizationId ? { organizationId: new Types.ObjectId(organizationId) } : {};
 
   const excessiveCustomers = await Customer.find({
+    ...orgMatch,
     status: 'active',
     currentBalance: { $gt: EXCESSIVE_COOLER_THRESHOLD },
   }).select('name shopName currentBalance');
@@ -33,6 +36,7 @@ export async function getAlerts(): Promise<Alert[]> {
   }
 
   const unservicedCustomers = await Customer.find({
+    ...orgMatch,
     status: 'active',
     $or: [
       { lastDeliveryDate: { $lt: new Date(now - UNSERVICED_DAYS_THRESHOLD * 86400000) } },
@@ -50,8 +54,10 @@ export async function getAlerts(): Promise<Alert[]> {
     });
   }
 
-  const inventory = await getInventorySnapshot();
-  if (!inventory.isBalanced) {
+  const inventory = organizationId
+    ? await getInventorySnapshot(organizationId)
+    : { isBalanced: true, missingCoolers: 0, warehouseStock: 999 };
+  if (organizationId && !inventory.isBalanced) {
     alerts.push({
       type: 'inventory_mismatch',
       severity: 'critical',
@@ -59,7 +65,7 @@ export async function getAlerts(): Promise<Alert[]> {
     });
   }
 
-  if (inventory.warehouseStock < LOW_STOCK_THRESHOLD) {
+  if (organizationId && inventory.warehouseStock < LOW_STOCK_THRESHOLD) {
     alerts.push({
       type: 'low_warehouse_stock',
       severity: 'warning',
@@ -67,7 +73,7 @@ export async function getAlerts(): Promise<Alert[]> {
     });
   }
 
-  const pendingInvoices = await Invoice.countDocuments({ status: 'pending' });
+  const pendingInvoices = await Invoice.countDocuments({ ...orgMatch, status: 'pending' });
   if (pendingInvoices > 0) {
     alerts.push({
       type: 'pending_invoices',

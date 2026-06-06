@@ -5,10 +5,12 @@ import { parseDateOnly, endOfDay } from '../utils/date';
 import PDFDocument from 'pdfkit';
 import { recordInvoiceEntry, recordInvoiceVoidEntry } from './ledger.service';
 import { withTransaction } from '../utils/transaction';
+import { assertCustomerInOrg, tenantFilter, tenantObjectId } from '../utils/tenant';
 
-async function generateInvoiceNumber(): Promise<string> {
+async function generateInvoiceNumber(organizationId: string): Promise<string> {
   const year = new Date().getFullYear();
   const count = await Invoice.countDocuments({
+    organizationId: new Types.ObjectId(organizationId),
     createdAt: { $gte: new Date(`${year}-01-01`) },
   });
   return `INV-${year}-${String(count + 1).padStart(5, '0')}`;
@@ -25,12 +27,15 @@ export function deriveInvoiceStatus(invoice: {
   return 'unpaid';
 }
 
-export async function syncInvoiceStatusFromPayments(invoiceId: string) {
-  const invoice = await Invoice.findById(invoiceId);
+export async function syncInvoiceStatusFromPayments(invoiceId: string, organizationId?: string) {
+  const filter = organizationId
+    ? tenantFilter(organizationId, { _id: invoiceId })
+    : { _id: invoiceId };
+  const invoice = await Invoice.findOne(filter);
   if (!invoice || invoice.status === 'void') return invoice;
 
   const paidAgg = await Payment.aggregate([
-    { $match: { invoiceId: invoice._id } },
+    { $match: { invoiceId: invoice._id, ...(organizationId ? { organizationId: tenantObjectId(organizationId) } : {}) } },
     { $group: { _id: null, total: { $sum: '$amount' } } },
   ]);
 
@@ -42,6 +47,7 @@ export async function syncInvoiceStatusFromPayments(invoiceId: string) {
 }
 
 export async function generateInvoice(input: {
+  organizationId: string;
   customerId: string;
   periodStart: string;
   periodEnd: string;
@@ -49,27 +55,30 @@ export async function generateInvoice(input: {
   userId: string;
 }) {
   return withTransaction(async (session) => {
-    const customer = await Customer.findById(input.customerId).session(session ?? null);
-    if (!customer) throw new ApiError(404, 'Customer not found');
+    const customer = await assertCustomerInOrg(input.customerId, input.organizationId);
 
     const periodStart = parseDateOnly(input.periodStart);
     const periodEnd = endOfDay(parseDateOnly(input.periodEnd));
 
     const existing = await Invoice.findOne({
-      customerId: customer._id,
-      periodStart,
-      periodEnd,
-      status: { $ne: 'void' },
+      ...tenantFilter(input.organizationId, {
+        customerId: customer._id,
+        periodStart,
+        periodEnd,
+        status: { $ne: 'void' },
+      }),
     }).session(session ?? null);
     if (existing) {
       throw new ApiError(409, 'Invoice already exists for this period');
     }
 
     const deliveries = await Delivery.find({
-      customerId: customer._id,
-      status: 'delivered',
-      deliveryDate: { $gte: periodStart, $lte: periodEnd },
-      filledGiven: { $gt: 0 },
+      ...tenantFilter(input.organizationId, {
+        customerId: customer._id,
+        status: 'delivered',
+        deliveryDate: { $gte: periodStart, $lte: periodEnd },
+        filledGiven: { $gt: 0 },
+      }),
     })
       .sort({ deliveryDate: 1 })
       .session(session ?? null);
@@ -95,7 +104,8 @@ export async function generateInvoice(input: {
     const [invoice] = await Invoice.create(
       [
         {
-          invoiceNumber: await generateInvoiceNumber(),
+          organizationId: customer.organizationId,
+          invoiceNumber: await generateInvoiceNumber(input.organizationId),
           customerId: customer._id,
           periodStart,
           periodEnd,
@@ -127,9 +137,9 @@ export async function generateInvoice(input: {
   });
 }
 
-export async function voidInvoice(id: string, userId: string) {
+export async function voidInvoice(id: string, userId: string, organizationId: string) {
   return withTransaction(async (session) => {
-    const invoice = await Invoice.findById(id).session(session ?? null);
+    const invoice = await Invoice.findOne(tenantFilter(organizationId, { _id: id })).session(session ?? null);
     if (!invoice) throw new ApiError(404, 'Invoice not found');
     if (invoice.status === 'void') throw new ApiError(400, 'Invoice already voided');
     if ((invoice.amountPaid ?? 0) > 0) {
@@ -154,12 +164,13 @@ export async function voidInvoice(id: string, userId: string) {
 }
 
 export async function listInvoices(filters: {
+  organizationId: string;
   customerId?: string;
   status?: string;
   page?: number;
   limit?: number;
 }) {
-  const query: Record<string, unknown> = {};
+  const query: Record<string, unknown> = tenantFilter(filters.organizationId);
   if (filters.customerId) query.customerId = new Types.ObjectId(filters.customerId);
   if (filters.status) query.status = filters.status;
 
@@ -180,8 +191,8 @@ export async function listInvoices(filters: {
   return { items, total, page, limit };
 }
 
-export async function getInvoiceById(id: string) {
-  const invoice = await Invoice.findById(id)
+export async function getInvoiceById(id: string, organizationId: string) {
+  const invoice = await Invoice.findOne(tenantFilter(organizationId, { _id: id }))
     .populate('customerId', 'name shopName mobile address')
     .populate('generatedBy', 'name');
   if (!invoice) throw new ApiError(404, 'Invoice not found');

@@ -68,22 +68,33 @@ export async function runSeed(options: { wipe?: boolean } = {}): Promise<boolean
 
   await ensureUserIndexes();
 
+  const { Organization } = await import('../models');
+  const org = await Organization.create({
+    name: 'Aqua Flow Demo',
+    slug: 'aqua-flow-demo',
+    isActive: true,
+    isDefault: true,
+  });
+
   const owner = await User.create({
     name: 'Business Owner',
     loginId: 'owner',
     password: await bcrypt.hash('admin123', 10),
     role: 'owner',
+    organizationId: org._id,
+    isPrimaryOwner: true,
   });
 
-  const areaA = await Area.create({ name: 'Area A', description: 'North zone', createdBy: owner._id });
-  const areaB = await Area.create({ name: 'Area B', description: 'South zone', createdBy: owner._id });
-  const areaC = await Area.create({ name: 'Area C', description: 'East zone', createdBy: owner._id });
+  const areaA = await Area.create({ name: 'Area A', description: 'North zone', organizationId: org._id, createdBy: owner._id });
+  const areaB = await Area.create({ name: 'Area B', description: 'South zone', organizationId: org._id, createdBy: owner._id });
+  const areaC = await Area.create({ name: 'Area C', description: 'East zone', organizationId: org._id, createdBy: owner._id });
 
   const driverUser1 = await User.create({
     name: 'Rajesh Kumar',
     loginId: 'driver1',
     password: await bcrypt.hash('driver123', 10),
     role: 'driver',
+    organizationId: org._id,
     createdBy: owner._id,
   });
 
@@ -91,6 +102,7 @@ export async function runSeed(options: { wipe?: boolean } = {}): Promise<boolean
     name: 'Rajesh Kumar',
     mobile: '9876543210',
     userId: driverUser1._id,
+    organizationId: org._id,
     createdBy: owner._id,
   });
   driverUser1.driverProfile = driver1._id;
@@ -101,6 +113,7 @@ export async function runSeed(options: { wipe?: boolean } = {}): Promise<boolean
     loginId: 'driver2',
     password: await bcrypt.hash('driver123', 10),
     role: 'driver',
+    organizationId: org._id,
     createdBy: owner._id,
   });
 
@@ -108,6 +121,7 @@ export async function runSeed(options: { wipe?: boolean } = {}): Promise<boolean
     name: 'Sunil Verma',
     mobile: '9876543211',
     userId: driverUser2._id,
+    organizationId: org._id,
     createdBy: owner._id,
   });
   driverUser2.driverProfile = driver2._id;
@@ -122,6 +136,7 @@ export async function runSeed(options: { wipe?: boolean } = {}): Promise<boolean
       assignedBy: owner._id,
       startDate: assignmentStart,
       isActive: true,
+      organizationId: org._id,
       createdBy: owner._id,
     },
     {
@@ -130,6 +145,7 @@ export async function runSeed(options: { wipe?: boolean } = {}): Promise<boolean
       assignedBy: owner._id,
       startDate: assignmentStart,
       isActive: true,
+      organizationId: org._id,
       createdBy: owner._id,
     },
   ]);
@@ -241,19 +257,21 @@ export async function runSeed(options: { wipe?: boolean } = {}): Promise<boolean
   ]);
 
   await PriceHistory.create({
+    organizationId: org._id,
     price: DEFAULT_PRICE,
     effectiveFrom: new Date('2025-01-01'),
     changedBy: owner._id,
   });
 
   await InventorySettings.create({
+    organizationId: org._id,
     totalCoolersOwned: 1000,
     warehouseStock: 800,
     inCirculation: 50,
     updatedBy: owner._id,
   });
 
-  await AnalyticsSettings.create({});
+  await AnalyticsSettings.create({ organizationId: org._id });
 
   const today = startOfDay();
   const yesterday = startOfDay(new Date(Date.now() - 24 * 60 * 60 * 1000));
@@ -348,6 +366,7 @@ export async function runSeed(options: { wipe?: boolean } = {}): Promise<boolean
     const { generateInvoice } = await import('./invoice.service');
     const monthStart = startOfDay(new Date(today.getFullYear(), today.getMonth(), 1));
     await generateInvoice({
+      organizationId: org._id.toString(),
       customerId: patel._id.toString(),
       periodStart: monthStart.toISOString().slice(0, 10),
       periodEnd: today.toISOString().slice(0, 10),
@@ -358,6 +377,9 @@ export async function runSeed(options: { wipe?: boolean } = {}): Promise<boolean
   } catch (err) {
     console.warn('Invoice seed skipped:', err instanceof Error ? err.message : err);
   }
+
+  const { migrateOrphanedRecordsToOrg } = await import('./organization.service');
+  await migrateOrphanedRecordsToOrg(org._id);
 
   logSeedSummary();
   return true;

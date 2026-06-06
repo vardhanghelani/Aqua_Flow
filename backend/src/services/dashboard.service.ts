@@ -1,5 +1,6 @@
 import { Delivery, Customer, Invoice, Area } from '../models';
 import { startOfDay, endOfDay } from '../utils/date';
+import { Types } from 'mongoose';
 
 function getMonthRange(date = new Date()) {
   const start = new Date(date.getFullYear(), date.getMonth(), 1);
@@ -13,10 +14,15 @@ function getYearRange(date = new Date()) {
   return { start, end };
 }
 
-async function sumBillableInRange(start: Date, end: Date) {
+function orgMatch(organizationId: string) {
+  return { organizationId: new Types.ObjectId(organizationId) };
+}
+
+async function sumBillableInRange(organizationId: string, start: Date, end: Date) {
   const agg = await Delivery.aggregate([
     {
       $match: {
+        ...orgMatch(organizationId),
         status: 'delivered',
         deliveryDate: { $gte: start, $lte: end },
       },
@@ -33,23 +39,24 @@ async function sumBillableInRange(start: Date, end: Date) {
   return agg[0] ?? { totalSales: 0, totalDeliveries: 0, totalQuantity: 0 };
 }
 
-export async function getSalesOverview() {
+export async function getSalesOverview(organizationId: string) {
   const today = startOfDay();
   const todayEnd = endOfDay();
   const month = getMonthRange();
   const year = getYearRange();
+  const org = orgMatch(organizationId);
 
   const [todayStats, monthStats, yearStats, pendingPayments, outstandingCoolers] =
     await Promise.all([
-      sumBillableInRange(today, todayEnd),
-      sumBillableInRange(month.start, month.end),
-      sumBillableInRange(year.start, year.end),
+      sumBillableInRange(organizationId, today, todayEnd),
+      sumBillableInRange(organizationId, month.start, month.end),
+      sumBillableInRange(organizationId, year.start, year.end),
       Invoice.aggregate([
-        { $match: { status: { $in: ['pending', 'unpaid', 'partially_paid'] } } },
+        { $match: { ...org, status: { $in: ['pending', 'unpaid', 'partially_paid'] } } },
         { $group: { _id: null, total: { $sum: { $ifNull: ['$amountDue', '$totalAmount'] } }, count: { $sum: 1 } } },
       ]),
       Customer.aggregate([
-        { $match: { currentBalance: { $gt: 0 } } },
+        { $match: { ...org, currentBalance: { $gt: 0 } } },
         { $group: { _id: null, total: { $sum: '$currentBalance' } } },
       ]),
     ]);
@@ -63,13 +70,13 @@ export async function getSalesOverview() {
   };
 }
 
-export async function getRevenueTrend(months = 6) {
+export async function getRevenueTrend(organizationId: string, months = 6) {
   const results = [];
   const now = new Date();
   for (let i = months - 1; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const range = getMonthRange(d);
-    const stats = await sumBillableInRange(range.start, range.end);
+    const stats = await sumBillableInRange(organizationId, range.start, range.end);
     results.push({
       month: d.toLocaleString('en-IN', { month: 'short', year: 'numeric' }),
       revenue: stats.totalSales,
@@ -79,9 +86,9 @@ export async function getRevenueTrend(months = 6) {
   return results;
 }
 
-export async function getTopCustomers(limit = 10) {
+export async function getTopCustomers(organizationId: string, limit = 10) {
   return Delivery.aggregate([
-    { $match: { status: 'delivered' } },
+    { $match: { ...orgMatch(organizationId), status: 'delivered' } },
     {
       $group: {
         _id: '$customerId',
@@ -114,9 +121,9 @@ export async function getTopCustomers(limit = 10) {
   ]);
 }
 
-export async function getAreaWiseSales() {
+export async function getAreaWiseSales(organizationId: string) {
   return Delivery.aggregate([
-    { $match: { status: 'delivered' } },
+    { $match: { ...orgMatch(organizationId), status: 'delivered' } },
     {
       $group: {
         _id: '$areaId',
@@ -142,9 +149,9 @@ export async function getAreaWiseSales() {
   ]);
 }
 
-export async function getDriverWiseSales() {
+export async function getDriverWiseSales(organizationId: string) {
   return Delivery.aggregate([
-    { $match: { status: 'delivered' } },
+    { $match: { ...orgMatch(organizationId), status: 'delivered' } },
     {
       $group: {
         _id: '$driverId',

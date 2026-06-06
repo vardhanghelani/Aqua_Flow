@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { body } from 'express-validator';
-import { authenticate, authorize } from '../middleware/auth';
+import { authenticate, authorizeBusiness } from '../middleware/auth';
+import { requireOrganization } from '../middleware/organization';
 import { validate } from '../middleware/validate';
 import {
   getAnalyticsSettings,
@@ -11,11 +12,11 @@ import { AuthRequest } from '../types';
 
 const router = Router();
 
-router.use(authenticate, authorize('owner'));
+router.use(authenticate, requireOrganization, authorizeBusiness());
 
-router.get('/analytics-rules', async (_req, res, next) => {
+router.get('/analytics-rules', async (req: AuthRequest, res, next) => {
   try {
-    const data = await getAnalyticsSettings();
+    const data = await getAnalyticsSettings(req.user!.organizationId!);
     res.json({ success: true, data });
   } catch (err) {
     next(err);
@@ -33,8 +34,9 @@ router.put(
   ]),
   async (req: AuthRequest, res, next) => {
     try {
-      const data = await updateAnalyticsSettings(req.body);
-      await refreshAllCustomerAnalytics();
+      const orgId = req.user!.organizationId!;
+      const data = await updateAnalyticsSettings(orgId, req.body);
+      await refreshAllCustomerAnalytics(orgId);
       res.json({ success: true, data });
     } catch (err) {
       next(err);

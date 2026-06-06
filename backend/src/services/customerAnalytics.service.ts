@@ -2,23 +2,26 @@ import { Customer, Delivery, Invoice, CoolerTransaction } from '../models';
 import { AnalyticsSettings } from '../models/AnalyticsSettings';
 import { Types } from 'mongoose';
 import { startOfDay } from '../utils/date';
+import { tenantFilter, tenantObjectId } from '../utils/tenant';
 
-export async function getAnalyticsSettings() {
-  let settings = await AnalyticsSettings.findOne();
+export async function getAnalyticsSettings(organizationId: string) {
+  let settings = await AnalyticsSettings.findOne({ organizationId: new Types.ObjectId(organizationId) });
   if (!settings) {
-    settings = await AnalyticsSettings.create({});
+    settings = await AnalyticsSettings.create({ organizationId: new Types.ObjectId(organizationId) });
   }
   return settings;
 }
 
-export async function updateAnalyticsSettings(data: Partial<{
+export async function updateAnalyticsSettings(
+  organizationId: string,
+  data: Partial<{
   inactiveDaysThreshold: number;
   atRiskDaysThreshold: number;
   excessiveCoolerThreshold: number;
   lowWarehouseThreshold: number;
   unservicedDaysThreshold: number;
 }>) {
-  const settings = await getAnalyticsSettings();
+  const settings = await getAnalyticsSettings(organizationId);
   Object.assign(settings, data);
   await settings.save();
   return settings;
@@ -38,11 +41,12 @@ export function classifyCustomerStatus(
   return 'active';
 }
 
-export async function computeCustomerAnalytics(customerId: string) {
-  const customer = await Customer.findById(customerId).populate('areaId', 'name');
+export async function computeCustomerAnalytics(customerId: string, organizationId: string) {
+  const customer = await Customer.findOne(tenantFilter(organizationId, { _id: customerId })).populate('areaId', 'name');
   if (!customer) return null;
 
-  const rules = await getAnalyticsSettings();
+  const orgId = tenantObjectId(organizationId);
+  const rules = await getAnalyticsSettings(organizationId);
   const analyticsStatus = classifyCustomerStatus(
     customer.lastDeliveryDate,
     customer.status,
@@ -56,7 +60,7 @@ export async function computeCustomerAnalytics(customerId: string) {
 
   const [deliveryStats, outstandingInvoices, monthlyTrend, coolerStats] = await Promise.all([
     Delivery.aggregate([
-      { $match: { customerId: customer._id, status: 'delivered' } },
+      { $match: { customerId: customer._id, organizationId: orgId, status: 'delivered' } },
       {
         $group: {
           _id: null,
@@ -71,6 +75,7 @@ export async function computeCustomerAnalytics(customerId: string) {
       {
         $match: {
           customerId: customer._id,
+          organizationId: orgId,
           status: { $in: ['unpaid', 'partially_paid', 'pending'] },
         },
       },
@@ -80,6 +85,7 @@ export async function computeCustomerAnalytics(customerId: string) {
       {
         $match: {
           customerId: customer._id,
+          organizationId: orgId,
           status: 'delivered',
           deliveryDate: { $gte: new Date(new Date().setMonth(new Date().getMonth() - 6)) },
         },
@@ -94,7 +100,7 @@ export async function computeCustomerAnalytics(customerId: string) {
       { $sort: { _id: 1 } },
     ]),
     CoolerTransaction.aggregate([
-      { $match: { customerId: customer._id, type: { $in: ['lost', 'damaged'] } } },
+      { $match: { customerId: customer._id, organizationId: orgId, type: { $in: ['lost', 'damaged'] } } },
       { $group: { _id: '$type', total: { $sum: '$quantity' } } },
     ]),
   ]);
@@ -144,9 +150,9 @@ export async function computeCustomerAnalytics(customerId: string) {
   };
 }
 
-export async function refreshAllCustomerAnalytics() {
-  const rules = await getAnalyticsSettings();
-  const customers = await Customer.find({ status: 'active' });
+export async function refreshAllCustomerAnalytics(organizationId: string) {
+  const rules = await getAnalyticsSettings(organizationId);
+  const customers = await Customer.find(tenantFilter(organizationId, { status: 'active' }));
   let updated = 0;
 
   for (const c of customers) {
@@ -161,11 +167,11 @@ export async function refreshAllCustomerAnalytics() {
   return { updated, total: customers.length };
 }
 
-export async function getInactiveCustomers(limit = 20) {
-  const rules = await getAnalyticsSettings();
+export async function getInactiveCustomers(organizationId: string, limit = 20) {
+  const rules = await getAnalyticsSettings(organizationId);
   const threshold = new Date(Date.now() - rules.inactiveDaysThreshold * 86400000);
-
-  return Customer.find({
+  const query: Record<string, unknown> = {
+    ...tenantFilter(organizationId),
     status: 'active',
     $or: [
       { analyticsStatus: 'inactive' },
@@ -173,7 +179,9 @@ export async function getInactiveCustomers(limit = 20) {
       { lastDeliveryDate: { $lt: threshold } },
       { lastDeliveryDate: { $exists: false } },
     ],
-  })
+  };
+
+  return Customer.find(query)
     .populate('areaId', 'name')
     .sort({ lastDeliveryDate: 1 })
     .limit(limit);

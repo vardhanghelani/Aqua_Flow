@@ -9,6 +9,7 @@ export type CoolerTransactionType =
   | 'adjustment';
 
 export interface ICoolerTransaction extends Document {
+  organizationId?: Types.ObjectId;
   customerId: Types.ObjectId;
   driverId?: Types.ObjectId;
   deliveryId?: Types.ObjectId;
@@ -24,6 +25,7 @@ export interface ICoolerTransaction extends Document {
 
 const coolerTransactionSchema = new Schema<ICoolerTransaction>(
   {
+    organizationId: { type: Schema.Types.ObjectId, ref: 'Organization', index: true },
     customerId: { type: Schema.Types.ObjectId, ref: 'Customer', required: true, index: true },
     driverId: { type: Schema.Types.ObjectId, ref: 'Driver' },
     deliveryId: { type: Schema.Types.ObjectId, ref: 'Delivery' },

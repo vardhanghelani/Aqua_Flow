@@ -14,6 +14,13 @@ export function validateEnvironment(): void {
     errors.push('MONGODB_URI is required.');
   }
 
+  if (process.env.NODE_ENV === 'production') {
+    const provisionSecret = process.env.PROVISION_SECRET?.trim();
+    if (!provisionSecret || provisionSecret.length < 24) {
+      errors.push('PROVISION_SECRET must be set to a strong value (min 24 chars) in production.');
+    }
+  }
+
   if (errors.length > 0) {
     console.error('Environment validation failed:\n', errors.map((e) => `  - ${e}`).join('\n'));
     process.exit(1);

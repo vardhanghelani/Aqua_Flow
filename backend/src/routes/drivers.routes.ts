@@ -1,12 +1,13 @@
 import { Router } from 'express';
-import { authenticate, authorize } from '../middleware/auth';
+import { authenticate, authorizeBusiness } from '../middleware/auth';
+import { requireOrganization } from '../middleware/organization';
 import { validate } from '../middleware/validate';
 import * as ctrl from '../controllers/master.controller';
 import * as p3 from '../controllers/phase3.controller';
 
 const router = Router();
 
-router.use(authenticate, authorize('owner'));
+router.use(authenticate, requireOrganization, authorizeBusiness());
 
 router.get('/:id/performance', validate(p3.idParam), p3.getDriverPerformance);
 router.get('/', ctrl.listDrivers);

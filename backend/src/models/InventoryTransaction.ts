@@ -3,6 +3,7 @@ import mongoose, { Document, Schema, Types } from 'mongoose';
 export type InventoryTransactionType = 'delivery' | 'adjustment' | 'initial';
 
 export interface IInventoryTransaction extends Document {
+  organizationId?: Types.ObjectId;
   type: InventoryTransactionType;
   deliveryId?: Types.ObjectId;
   filledOut: number;
@@ -16,6 +17,7 @@ export interface IInventoryTransaction extends Document {
 
 const inventoryTransactionSchema = new Schema<IInventoryTransaction>(
   {
+    organizationId: { type: Schema.Types.ObjectId, ref: 'Organization', index: true },
     type: { type: String, enum: ['delivery', 'adjustment', 'initial'], required: true },
     deliveryId: { type: Schema.Types.ObjectId, ref: 'Delivery' },
     filledOut: { type: Number, default: 0, min: 0 },

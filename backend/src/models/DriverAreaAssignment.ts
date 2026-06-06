@@ -1,6 +1,7 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
 
 export interface IDriverAreaAssignment extends Document {
+  organizationId?: Types.ObjectId;
   driverId: Types.ObjectId;
   areaId: Types.ObjectId;
   assignedBy: Types.ObjectId;
@@ -15,6 +16,7 @@ export interface IDriverAreaAssignment extends Document {
 
 const assignmentSchema = new Schema<IDriverAreaAssignment>(
   {
+    organizationId: { type: Schema.Types.ObjectId, ref: 'Organization', index: true },
     driverId: { type: Schema.Types.ObjectId, ref: 'Driver', required: true, index: true },
     areaId: { type: Schema.Types.ObjectId, ref: 'Area', required: true, index: true },
     assignedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },

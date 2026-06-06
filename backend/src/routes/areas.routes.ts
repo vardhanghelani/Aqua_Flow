@@ -1,11 +1,12 @@
 import { Router } from 'express';
-import { authenticate, authorize } from '../middleware/auth';
+import { authenticate, authorizeBusiness } from '../middleware/auth';
+import { requireOrganization } from '../middleware/organization';
 import { validate } from '../middleware/validate';
 import * as ctrl from '../controllers/master.controller';
 
 const router = Router();
 
-router.use(authenticate, authorize('owner'));
+router.use(authenticate, requireOrganization, authorizeBusiness());
 
 router.get('/', ctrl.listAreas);
 router.post('/', validate(ctrl.areaValidation), ctrl.createArea);

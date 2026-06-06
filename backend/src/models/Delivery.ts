@@ -3,6 +3,7 @@ import mongoose, { Document, Schema, Types } from 'mongoose';
 export type DeliveryStatus = 'delivered' | 'not_delivered';
 
 export interface IDelivery extends Document {
+  organizationId?: Types.ObjectId;
   customerId: Types.ObjectId;
   driverId: Types.ObjectId;
   areaId: Types.ObjectId;
@@ -22,6 +23,7 @@ export interface IDelivery extends Document {
 
 const deliverySchema = new Schema<IDelivery>(
   {
+    organizationId: { type: Schema.Types.ObjectId, ref: 'Organization', index: true },
     customerId: { type: Schema.Types.ObjectId, ref: 'Customer', required: true },
     driverId: { type: Schema.Types.ObjectId, ref: 'Driver', required: true },
     areaId: { type: Schema.Types.ObjectId, ref: 'Area', required: true },

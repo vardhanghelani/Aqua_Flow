@@ -1,6 +1,7 @@
 import mongoose, { Document, Schema, Types } from 'mongoose';
 
 export interface IInventorySettings extends Document {
+  organizationId?: Types.ObjectId;
   totalCoolersOwned: number;
   warehouseStock: number;
   inTransit: number;
@@ -14,6 +15,7 @@ export interface IInventorySettings extends Document {
 
 const inventorySettingsSchema = new Schema<IInventorySettings>(
   {
+    organizationId: { type: Schema.Types.ObjectId, ref: 'Organization', index: true },
     totalCoolersOwned: { type: Number, required: true, default: 0, min: 0 },
     warehouseStock: { type: Number, required: true, default: 0, min: 0 },
     inTransit: { type: Number, default: 0, min: 0 },

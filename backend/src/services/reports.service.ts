@@ -3,12 +3,14 @@ import { getInventorySnapshot } from './inventory.service';
 import { getPaymentSummary } from './payment.service';
 import { Types } from 'mongoose';
 import { startOfDay } from '../utils/date';
+import { tenantFilter } from '../utils/tenant';
 
-export async function getCustomerReports() {
-  const customers = await Customer.find().populate('areaId', 'name').lean();
+export async function getCustomerReports(organizationId: string) {
+  const orgId = new Types.ObjectId(organizationId);
+  const customers = await Customer.find({ organizationId: orgId }).populate('areaId', 'name').lean();
 
   const deliveryStats = await Delivery.aggregate([
-    { $match: { status: 'delivered' } },
+    { $match: { organizationId: orgId, status: 'delivered' } },
     {
       $group: {
         _id: '$customerId',
@@ -21,7 +23,7 @@ export async function getCustomerReports() {
   ]);
 
   const outstandingAgg = await Invoice.aggregate([
-    { $match: { status: { $in: ['unpaid', 'partially_paid', 'pending'] } } },
+    { $match: { organizationId: orgId, status: { $in: ['unpaid', 'partially_paid', 'pending'] } } },
     { $group: { _id: '$customerId', outstanding: { $sum: { $ifNull: ['$amountDue', '$totalAmount'] } } } },
   ]);
   const outstandingMap = new Map(outstandingAgg.map((o) => [o._id.toString(), o.outstanding]));
@@ -69,8 +71,9 @@ export async function getCustomerReports() {
   });
 }
 
-export async function getAreaReports() {
-  const areas = await Area.find({ isActive: true }).lean();
+export async function getAreaReports(organizationId: string) {
+  const orgId = new Types.ObjectId(organizationId);
+  const areas = await Area.find({ organizationId: orgId, isActive: true }).lean();
   const results = [];
 
   for (const area of areas) {
@@ -110,8 +113,9 @@ export async function getAreaReports() {
   return results;
 }
 
-export async function getDriverReports() {
-  const drivers = await Driver.find({ isActive: true }).lean();
+export async function getDriverReports(organizationId: string) {
+  const orgId = new Types.ObjectId(organizationId);
+  const drivers = await Driver.find({ organizationId: orgId, isActive: true }).lean();
   const results = [];
 
   for (const driver of drivers) {
@@ -171,8 +175,10 @@ export async function getDriverReports() {
   return results;
 }
 
-export async function getPaymentReports(from?: string, to?: string) {
-  const query: Record<string, unknown> = {};
+export async function getPaymentReports(organizationId: string, from?: string, to?: string) {
+  if (!organizationId) throw new Error('Organization context required');
+  const orgMatch = tenantFilter(organizationId);
+  const query: Record<string, unknown> = { ...orgMatch };
   if (from || to) {
     query.paymentDate = {};
     if (from) (query.paymentDate as Record<string, Date>).$gte = new Date(from);
@@ -184,17 +190,17 @@ export async function getPaymentReports(from?: string, to?: string) {
       .populate('customerId', 'shopName')
       .populate('invoiceId', 'invoiceNumber')
       .sort({ paymentDate: -1 }),
-    getPaymentSummary(),
+    getPaymentSummary(organizationId),
   ]);
 
   return { payments, summary };
 }
 
-export async function getInventoryReports() {
+export async function getInventoryReports(organizationId: string) {
   const { reconcileInventory } = await import('./inventory.service');
   const [snapshot, reconcile] = await Promise.all([
-    getInventorySnapshot(),
-    reconcileInventory(),
+    getInventorySnapshot(organizationId),
+    reconcileInventory(organizationId),
   ]);
   return { snapshot, reconcile };
 }

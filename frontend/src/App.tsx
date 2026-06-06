@@ -21,6 +21,8 @@ import { ExpensesPage } from '@/pages/owner/ExpensesPage';
 import { DriverPerformancePage } from '@/pages/owner/DriverPerformancePage';
 import { DeliveriesPage } from '@/pages/driver/DeliveriesPage';
 import { HistoryPage } from '@/pages/driver/HistoryPage';
+import { ProvisionPage } from '@/pages/auth/ProvisionPage';
+import { isBusinessUser, businessHomePath } from '@/lib/auth-utils';
 
 function LoadingScreen() {
   return (
@@ -33,12 +35,15 @@ function LoadingScreen() {
   );
 }
 
-function ProtectedRoute({ children, role }: { children: React.ReactNode; role?: 'owner' | 'driver' }) {
+function ProtectedRoute({ children, role }: { children: React.ReactNode; role?: 'business' | 'driver' }) {
   const { user, loading } = useAuth();
   if (loading) return <LoadingScreen />;
   if (!user) return <Navigate to="/login" replace />;
-  if (role && user.role !== role) {
-    return <Navigate to={user.role === 'driver' ? '/driver/deliveries' : '/dashboard'} replace />;
+  if (role === 'business' && !isBusinessUser(user.role)) {
+    return <Navigate to="/driver/deliveries" replace />;
+  }
+  if (role === 'driver' && user.role !== 'driver') {
+    return <Navigate to={businessHomePath(user)} replace />;
   }
   return <>{children}</>;
 }
@@ -49,24 +54,28 @@ function AppRoutes() {
 
   return (
     <Routes>
-      <Route path="/login" element={user ? <Navigate to={user.role === 'driver' ? '/driver/deliveries' : '/dashboard'} /> : <LoginPage />} />
+      <Route
+        path="/login"
+        element={user ? <Navigate to={businessHomePath(user)} /> : <LoginPage />}
+      />
+      <Route path="/provision" element={<ProvisionPage />} />
       <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-        <Route path="/dashboard" element={<ProtectedRoute role="owner"><DashboardPage /></ProtectedRoute>} />
-        <Route path="/customers" element={<ProtectedRoute role="owner"><CustomersPage /></ProtectedRoute>} />
-        <Route path="/customers/:id" element={<ProtectedRoute role="owner"><CustomerDetailPage /></ProtectedRoute>} />
-        <Route path="/payments" element={<ProtectedRoute role="owner"><PaymentsPage /></ProtectedRoute>} />
-        <Route path="/settlements" element={<ProtectedRoute role="owner"><SettlementsPage /></ProtectedRoute>} />
-        <Route path="/collections" element={<ProtectedRoute role="owner"><CollectionsPage /></ProtectedRoute>} />
-        <Route path="/expenses" element={<ProtectedRoute role="owner"><ExpensesPage /></ProtectedRoute>} />
-        <Route path="/drivers/:id/performance" element={<ProtectedRoute role="owner"><DriverPerformancePage /></ProtectedRoute>} />
-        <Route path="/areas" element={<ProtectedRoute role="owner"><AreasPage /></ProtectedRoute>} />
-        <Route path="/drivers" element={<ProtectedRoute role="owner"><DriversPage /></ProtectedRoute>} />
-        <Route path="/assignments" element={<ProtectedRoute role="owner"><AssignmentsPage /></ProtectedRoute>} />
-        <Route path="/deliveries" element={<ProtectedRoute role="owner"><OwnerDeliveriesPage /></ProtectedRoute>} />
-        <Route path="/inventory" element={<ProtectedRoute role="owner"><InventoryPage /></ProtectedRoute>} />
-        <Route path="/invoices" element={<ProtectedRoute role="owner"><InvoicesPage /></ProtectedRoute>} />
-        <Route path="/reports" element={<ProtectedRoute role="owner"><ReportsPage /></ProtectedRoute>} />
-        <Route path="/settings" element={<ProtectedRoute role="owner"><SettingsPage /></ProtectedRoute>} />
+        <Route path="/dashboard" element={<ProtectedRoute role="business"><DashboardPage /></ProtectedRoute>} />
+        <Route path="/customers" element={<ProtectedRoute role="business"><CustomersPage /></ProtectedRoute>} />
+        <Route path="/customers/:id" element={<ProtectedRoute role="business"><CustomerDetailPage /></ProtectedRoute>} />
+        <Route path="/payments" element={<ProtectedRoute role="business"><PaymentsPage /></ProtectedRoute>} />
+        <Route path="/settlements" element={<ProtectedRoute role="business"><SettlementsPage /></ProtectedRoute>} />
+        <Route path="/collections" element={<ProtectedRoute role="business"><CollectionsPage /></ProtectedRoute>} />
+        <Route path="/expenses" element={<ProtectedRoute role="business"><ExpensesPage /></ProtectedRoute>} />
+        <Route path="/drivers/:id/performance" element={<ProtectedRoute role="business"><DriverPerformancePage /></ProtectedRoute>} />
+        <Route path="/areas" element={<ProtectedRoute role="business"><AreasPage /></ProtectedRoute>} />
+        <Route path="/drivers" element={<ProtectedRoute role="business"><DriversPage /></ProtectedRoute>} />
+        <Route path="/assignments" element={<ProtectedRoute role="business"><AssignmentsPage /></ProtectedRoute>} />
+        <Route path="/deliveries" element={<ProtectedRoute role="business"><OwnerDeliveriesPage /></ProtectedRoute>} />
+        <Route path="/inventory" element={<ProtectedRoute role="business"><InventoryPage /></ProtectedRoute>} />
+        <Route path="/invoices" element={<ProtectedRoute role="business"><InvoicesPage /></ProtectedRoute>} />
+        <Route path="/reports" element={<ProtectedRoute role="business"><ReportsPage /></ProtectedRoute>} />
+        <Route path="/settings" element={<ProtectedRoute role="business"><SettingsPage /></ProtectedRoute>} />
         {/* Legacy redirects */}
         <Route path="/pricing" element={<Navigate to="/settings" replace />} />
         <Route path="/audit" element={<Navigate to="/settings" replace />} />

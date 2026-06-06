@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { body } from 'express-validator';
-import { authenticate, authorize } from '../middleware/auth';
+import { authenticate, authorizeBusiness } from '../middleware/auth';
+import { requireOrganization } from '../middleware/organization';
 import { validate } from '../middleware/validate';
 import * as coolerService from '../services/coolerTransaction.service';
 import { logAudit } from '../middleware/audit';
@@ -8,11 +9,12 @@ import { AuthRequest } from '../types';
 
 const router = Router();
 
-router.use(authenticate);
+router.use(authenticate, requireOrganization);
 
-router.get('/', authorize('owner'), async (req, res, next) => {
+router.get('/', authorizeBusiness(), async (req: AuthRequest, res, next) => {
   try {
     const data = await coolerService.listCoolerTransactions({
+      organizationId: req.user!.organizationId!,
       customerId: req.query.customerId as string,
       type: req.query.type as string,
       from: req.query.from as string,
@@ -25,9 +27,9 @@ router.get('/', authorize('owner'), async (req, res, next) => {
   }
 });
 
-router.get('/summary', authorize('owner'), async (_req, res, next) => {
+router.get('/summary', authorizeBusiness(), async (req: AuthRequest, res, next) => {
   try {
-    const data = await coolerService.getCoolerSummary();
+    const data = await coolerService.getCoolerSummary(req.user!.organizationId!);
     res.json({ success: true, data });
   } catch (err) {
     next(err);
@@ -36,7 +38,7 @@ router.get('/summary', authorize('owner'), async (_req, res, next) => {
 
 router.post(
   '/',
-  authorize('owner'),
+  authorizeBusiness(),
   validate([
     body('customerId').notEmpty(),
     body('type').isIn(['delivered', 'returned', 'damaged', 'lost', 'replaced', 'adjustment']),
@@ -46,6 +48,7 @@ router.post(
     try {
       const txn = await coolerService.createCoolerTransaction({
         ...req.body,
+        organizationId: req.user!.organizationId!,
         userId: req.user!.id,
       });
       await logAudit(req, 'create', 'CoolerTransaction', txn._id.toString(), req.body);

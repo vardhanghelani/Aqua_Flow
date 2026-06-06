@@ -42,6 +42,35 @@ class ApiClient {
     return this.request<import('@/types').User>('/auth/me');
   }
 
+  provisionBusiness(data: {
+    provisionSecret: string;
+    businessName: string;
+    ownerName: string;
+    loginId: string;
+    password: string;
+  }) {
+    return this.request<{
+      message: string;
+      organization: { id: string; name: string; slug: string };
+      owner: { id: string; loginId: string; name: string };
+    }>('/provision/business', { method: 'POST', body: JSON.stringify(data) });
+  }
+
+  getCoOwners() {
+    return this.request<Array<{ _id: string; name: string; loginId: string; createdAt: string }>>('/auth/co-owners');
+  }
+
+  createCoOwner(data: { name: string; loginId: string; password: string }) {
+    return this.request<{ id: string; name: string; loginId: string }>('/auth/co-owners', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  removeCoOwner(id: string) {
+    return this.request<{ message: string }>(`/auth/co-owners/${id}`, { method: 'DELETE' });
+  }
+
   // Areas
   getAreas() {
     return this.request<import('@/types').Area[]>('/areas');

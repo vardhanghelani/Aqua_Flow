@@ -4,8 +4,10 @@ import { CollectionPaymentMethod } from '../models/DriverCollection';
 import { ApiError } from '../utils/apiError';
 import { parseDateOnly, endOfDay } from '../utils/date';
 import { recordPayment } from './payment.service';
+import { assertDriverInOrg, assertInvoiceInOrg, assertCollectionInOrg, tenantFilter } from '../utils/tenant';
 
 export async function recordCollection(input: {
+  organizationId: string;
   driverId: string;
   customerId?: string;
   invoiceId?: string;
@@ -18,7 +20,13 @@ export async function recordCollection(input: {
   userId: string;
   createPayment?: boolean;
 }) {
+  await assertDriverInOrg(input.driverId, input.organizationId);
+  if (input.invoiceId) {
+    await assertInvoiceInOrg(input.invoiceId, input.organizationId);
+  }
+
   const collection = await DriverCollection.create({
+    organizationId: new Types.ObjectId(input.organizationId),
     driverId: new Types.ObjectId(input.driverId),
     customerId: input.customerId ? new Types.ObjectId(input.customerId) : undefined,
     invoiceId: input.invoiceId ? new Types.ObjectId(input.invoiceId) : undefined,
@@ -33,6 +41,7 @@ export async function recordCollection(input: {
 
   if (input.createPayment && input.invoiceId) {
     const payment = await recordPayment({
+      organizationId: input.organizationId,
       invoiceId: input.invoiceId,
       amount: input.amount,
       paymentDate: collection.collectionDate,
@@ -56,9 +65,8 @@ export async function recordCollection(input: {
   return collection.populate(['driverId', 'customerId', 'invoiceId']);
 }
 
-export async function reconcileCollection(id: string, userId: string) {
-  const collection = await DriverCollection.findById(id);
-  if (!collection) throw new ApiError(404, 'Collection not found');
+export async function reconcileCollection(id: string, userId: string, organizationId: string) {
+  const collection = await assertCollectionInOrg(id, organizationId);
   if (collection.reconciled) throw new ApiError(400, 'Already reconciled');
   collection.reconciled = true;
   collection.reconciledAt = new Date();
@@ -67,6 +75,7 @@ export async function reconcileCollection(id: string, userId: string) {
 }
 
 export async function listCollections(filters: {
+  organizationId: string;
   driverId?: string;
   customerId?: string;
   reconciled?: boolean;
@@ -75,7 +84,7 @@ export async function listCollections(filters: {
   page?: number;
   limit?: number;
 }) {
-  const query: Record<string, unknown> = {};
+  const query: Record<string, unknown> = tenantFilter(filters.organizationId);
   if (filters.driverId) query.driverId = new Types.ObjectId(filters.driverId);
   if (filters.customerId) query.customerId = new Types.ObjectId(filters.customerId);
   if (filters.reconciled !== undefined) query.reconciled = filters.reconciled;
@@ -103,8 +112,13 @@ export async function listCollections(filters: {
   return { items, total, page, limit };
 }
 
-export async function getCollectionReport(filters: { from?: string; to?: string; driverId?: string }) {
-  const match: Record<string, unknown> = {};
+export async function getCollectionReport(filters: {
+  organizationId: string;
+  from?: string;
+  to?: string;
+  driverId?: string;
+}) {
+  const match: Record<string, unknown> = tenantFilter(filters.organizationId);
   if (filters.driverId) match.driverId = new Types.ObjectId(filters.driverId);
   if (filters.from || filters.to) {
     match.collectionDate = {};

@@ -1,14 +1,15 @@
 import { Router } from 'express';
-import { authenticate, authorize } from '../middleware/auth';
+import { authenticate, authorizeBusiness } from '../middleware/auth';
+import { requireOrganization } from '../middleware/organization';
 import { validate } from '../middleware/validate';
 import * as ctrl from '../controllers/assignment.controller';
 
 const router = Router();
 
-router.use(authenticate);
+router.use(authenticate, requireOrganization);
 
-router.get('/active', authorize('owner'), ctrl.active);
-router.get('/', authorize('owner'), ctrl.list);
-router.post('/', authorize('owner'), validate(ctrl.assignValidation), ctrl.assign);
+router.get('/active', authorizeBusiness(), ctrl.active);
+router.get('/', authorizeBusiness(), ctrl.list);
+router.post('/', authorizeBusiness(), validate(ctrl.assignValidation), ctrl.assign);
 
 export default router;

@@ -1,72 +1,74 @@
 import { Router } from 'express';
-import { authenticate, authorize } from '../middleware/auth';
+import { authenticate, authorizeBusiness } from '../middleware/auth';
+import { requireOrganization } from '../middleware/organization';
+import { AuthRequest } from '../types';
 import * as dashboardService from '../services/dashboard.service';
 import * as notificationsService from '../services/notifications.service';
 import * as operationalDashboard from '../services/operationalDashboard.service';
 
 const router = Router();
 
-router.use(authenticate, authorize('owner'));
+router.use(authenticate, requireOrganization, authorizeBusiness());
 
-router.get('/operational', async (_req, res, next) => {
+router.get('/operational', async (req: AuthRequest, res, next) => {
   try {
-    const data = await operationalDashboard.getOperationalDashboard();
+    const data = await operationalDashboard.getOperationalDashboard(req.user!.organizationId!);
     res.json({ success: true, data });
   } catch (err) {
     next(err);
   }
 });
 
-router.get('/sales', async (_req, res, next) => {
+router.get('/sales', async (req: AuthRequest, res, next) => {
   try {
-    const data = await dashboardService.getSalesOverview();
+    const data = await dashboardService.getSalesOverview(req.user!.organizationId!);
     res.json({ success: true, data });
   } catch (err) {
     next(err);
   }
 });
 
-router.get('/charts/revenue-trend', async (req, res, next) => {
+router.get('/charts/revenue-trend', async (req: AuthRequest, res, next) => {
   try {
     const months = req.query.months ? parseInt(req.query.months as string) : 6;
-    const data = await dashboardService.getRevenueTrend(months);
+    const data = await dashboardService.getRevenueTrend(req.user!.organizationId!, months);
     res.json({ success: true, data });
   } catch (err) {
     next(err);
   }
 });
 
-router.get('/top-customers', async (req, res, next) => {
+router.get('/top-customers', async (req: AuthRequest, res, next) => {
   try {
     const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
-    const data = await dashboardService.getTopCustomers(limit);
+    const data = await dashboardService.getTopCustomers(req.user!.organizationId!, limit);
     res.json({ success: true, data });
   } catch (err) {
     next(err);
   }
 });
 
-router.get('/area-sales', async (_req, res, next) => {
+router.get('/area-sales', async (req: AuthRequest, res, next) => {
   try {
-    const data = await dashboardService.getAreaWiseSales();
+    const data = await dashboardService.getAreaWiseSales(req.user!.organizationId!);
     res.json({ success: true, data });
   } catch (err) {
     next(err);
   }
 });
 
-router.get('/driver-sales', async (_req, res, next) => {
+router.get('/driver-sales', async (req: AuthRequest, res, next) => {
   try {
-    const data = await dashboardService.getDriverWiseSales();
+    const data = await dashboardService.getDriverWiseSales(req.user!.organizationId!);
     res.json({ success: true, data });
   } catch (err) {
     next(err);
   }
 });
 
-router.get('/alerts', async (_req, res, next) => {
+router.get('/alerts', async (req: AuthRequest, res, next) => {
   try {
-    const data = await notificationsService.getAlerts();
+    const data = await notificationsService.getAlerts(req.user!.organizationId!);
     res.json({ success: true, data });
   } catch (err) {
     next(err);

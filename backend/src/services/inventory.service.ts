@@ -14,10 +14,12 @@ export interface InventorySnapshotV2 {
   isBalanced: boolean;
 }
 
-export async function getOrCreateSettings() {
-  let settings = await InventorySettings.findOne();
+export async function getOrCreateSettings(organizationId: string) {
+  const orgId = new Types.ObjectId(organizationId);
+  let settings = await InventorySettings.findOne({ organizationId: orgId });
   if (!settings) {
     settings = await InventorySettings.create({
+      organizationId: orgId,
       totalCoolersOwned: 0,
       warehouseStock: 0,
       inTransit: 0,
@@ -29,9 +31,11 @@ export async function getOrCreateSettings() {
   return settings;
 }
 
-export async function getInventorySnapshot(): Promise<InventorySnapshotV2> {
-  const settings = await getOrCreateSettings();
+export async function getInventorySnapshot(organizationId: string): Promise<InventorySnapshotV2> {
+  const settings = await getOrCreateSettings(organizationId);
+  const orgId = new Types.ObjectId(organizationId);
   const agg = await Customer.aggregate([
+    { $match: { organizationId: orgId, deletedAt: null } },
     { $group: { _id: null, total: { $sum: '$currentBalance' } } },
   ]);
   const customerHoldings = agg[0]?.total ?? 0;
@@ -65,6 +69,7 @@ export async function getInventorySnapshot(): Promise<InventorySnapshotV2> {
 }
 
 export async function updateSettings(
+  organizationId: string,
   data: {
     totalCoolersOwned?: number;
     warehouseStock?: number;
@@ -75,7 +80,7 @@ export async function updateSettings(
   },
   userId: string
 ) {
-  const settings = await getOrCreateSettings();
+  const settings = await getOrCreateSettings(organizationId);
   if (data.totalCoolersOwned !== undefined) settings.totalCoolersOwned = data.totalCoolersOwned;
   if (data.warehouseStock !== undefined) settings.warehouseStock = data.warehouseStock;
   if (data.inTransit !== undefined) settings.inTransit = data.inTransit;
@@ -84,10 +89,11 @@ export async function updateSettings(
   if (data.lostStock !== undefined) settings.lostStock = data.lostStock;
   settings.updatedBy = new Types.ObjectId(userId);
   await settings.save();
-  return getInventorySnapshot();
+  return getInventorySnapshot(organizationId);
 }
 
 export async function adjustInventory(
+  organizationId: string,
   filledOut: number,
   emptyIn: number,
   notes: string,
@@ -95,13 +101,14 @@ export async function adjustInventory(
   type: 'delivery' | 'adjustment' = 'adjustment',
   deliveryId?: string
 ) {
-  const settings = await getOrCreateSettings();
+  const settings = await getOrCreateSettings(organizationId);
   settings.warehouseStock = settings.warehouseStock - filledOut + emptyIn;
   if (settings.warehouseStock < 0) settings.warehouseStock = 0;
   settings.updatedBy = new Types.ObjectId(userId);
   await settings.save();
 
   await InventoryTransaction.create({
+    organizationId: new Types.ObjectId(organizationId),
     type,
     deliveryId: deliveryId ? new Types.ObjectId(deliveryId) : undefined,
     filledOut,
@@ -111,10 +118,11 @@ export async function adjustInventory(
     createdBy: new Types.ObjectId(userId),
   });
 
-  return getInventorySnapshot();
+  return getInventorySnapshot(organizationId);
 }
 
 export async function applyDeliveryInventoryDelta(
+  organizationId: string,
   prevFilled: number,
   prevReturned: number,
   newFilled: number,
@@ -124,9 +132,10 @@ export async function applyDeliveryInventoryDelta(
 ) {
   const filledDelta = newFilled - prevFilled;
   const returnedDelta = newReturned - prevReturned;
-  if (filledDelta === 0 && returnedDelta === 0) return getInventorySnapshot();
+  if (filledDelta === 0 && returnedDelta === 0) return getInventorySnapshot(organizationId);
 
   return adjustInventory(
+    organizationId,
     filledDelta,
     returnedDelta,
     'Delivery inventory update',
@@ -136,11 +145,13 @@ export async function applyDeliveryInventoryDelta(
   );
 }
 
-export async function reconcileInventory() {
-  const snapshot = await getInventorySnapshot();
-  const settings = await getOrCreateSettings();
+export async function reconcileInventory(organizationId: string) {
+  const snapshot = await getInventorySnapshot(organizationId);
+  const settings = await getOrCreateSettings(organizationId);
+  const orgId = new Types.ObjectId(organizationId);
 
   const customerAgg = await Customer.aggregate([
+    { $match: { organizationId: orgId, deletedAt: null } },
     {
       $group: {
         _id: null,
@@ -170,15 +181,16 @@ export async function reconcileInventory() {
   };
 }
 
-export async function listInventoryTransactions(page = 1, limit = 50) {
+export async function listInventoryTransactions(organizationId: string, page = 1, limit = 50) {
   const skip = (page - 1) * limit;
+  const orgId = new Types.ObjectId(organizationId);
   const [items, total] = await Promise.all([
-    InventoryTransaction.find()
+    InventoryTransaction.find({ organizationId: orgId })
       .populate('createdBy', 'name')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit),
-    InventoryTransaction.countDocuments(),
+    InventoryTransaction.countDocuments({ organizationId: orgId }),
   ]);
   return { items, total, page, limit };
 }

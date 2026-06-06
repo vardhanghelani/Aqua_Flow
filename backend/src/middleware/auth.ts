@@ -28,3 +28,8 @@ export function authorize(...roles: UserRole[]) {
     next();
   };
 }
+
+/** Owner and co-owner share business administration access. */
+export function authorizeBusiness() {
+  return authorize('owner', 'co_owner');
+}

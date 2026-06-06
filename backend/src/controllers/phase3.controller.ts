@@ -12,6 +12,10 @@ import * as customer360Service from '../services/customer360.service';
 import * as backupService from '../services/backup.service';
 import { resolveDriverId } from '../utils/driverAuth';
 
+function orgId(req: AuthRequest) {
+  return req.user!.organizationId!;
+}
+
 export const idParam = [param('id').isMongoId()];
 
 // Settlements
@@ -23,7 +27,7 @@ export const settlementValidation = [
 export async function upsertSettlement(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const driverId = resolveDriverId(req, req.body.driverId);
-    const data = await settlementService.upsertSettlement({ ...req.body, driverId, userId: req.user!.id });
+    const data = await settlementService.upsertSettlement({ ...req.body, driverId, userId: req.user!.id, organizationId: orgId(req) });
     res.json({ success: true, data });
   } catch (err) {
     next(err);
@@ -33,6 +37,7 @@ export async function upsertSettlement(req: AuthRequest, res: Response, next: Ne
 export async function listSettlements(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const data = await settlementService.listSettlements({
+      organizationId: orgId(req),
       driverId: req.query.driverId as string,
       status: req.query.status as string,
       from: req.query.from as string,
@@ -48,7 +53,7 @@ export async function listSettlements(req: AuthRequest, res: Response, next: Nex
 
 export async function getSettlement(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    const data = await settlementService.getSettlementById(req.params.id);
+    const data = await settlementService.getSettlementById(req.params.id, orgId(req));
     res.json({ success: true, data });
   } catch (err) {
     next(err);
@@ -57,7 +62,7 @@ export async function getSettlement(req: AuthRequest, res: Response, next: NextF
 
 export async function submitSettlement(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    const existing = await settlementService.getSettlementById(req.params.id);
+    const existing = await settlementService.getSettlementById(req.params.id, orgId(req));
     if (req.user!.role === 'driver') {
       const settlementDriverId = (existing.driverId as { _id?: { toString: () => string } })?._id?.toString?.()
         ?? (existing.driverId as { toString?: () => string })?.toString?.();
@@ -65,7 +70,7 @@ export async function submitSettlement(req: AuthRequest, res: Response, next: Ne
         throw new ApiError(403, 'Cannot submit another driver\'s settlement');
       }
     }
-    const data = await settlementService.submitSettlement(req.params.id, req.user!.id);
+    const data = await settlementService.submitSettlement(req.params.id, req.user!.id, orgId(req));
     await logAudit(req, 'update', 'DriverDailySettlement', req.params.id, { action: 'submit' });
     res.json({ success: true, data });
   } catch (err) {
@@ -75,7 +80,7 @@ export async function submitSettlement(req: AuthRequest, res: Response, next: Ne
 
 export async function approveSettlement(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    const data = await settlementService.approveSettlement(req.params.id, req.user!.id);
+    const data = await settlementService.approveSettlement(req.params.id, req.user!.id, orgId(req));
     await logAudit(req, 'update', 'DriverDailySettlement', req.params.id, { action: 'approve' });
     res.json({ success: true, data });
   } catch (err) {
@@ -85,7 +90,7 @@ export async function approveSettlement(req: AuthRequest, res: Response, next: N
 
 export async function rejectSettlement(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    const data = await settlementService.rejectSettlement(req.params.id, req.user!.id, req.body.reason);
+    const data = await settlementService.rejectSettlement(req.params.id, req.user!.id, orgId(req), req.body.reason);
     await logAudit(req, 'update', 'DriverDailySettlement', req.params.id, { action: 'reject', reason: req.body.reason });
     res.json({ success: true, data });
   } catch (err) {
@@ -107,6 +112,7 @@ export async function recordCollection(req: AuthRequest, res: Response, next: Ne
       ...req.body,
       driverId,
       userId: req.user!.id,
+      organizationId: orgId(req),
       createPayment: req.body.createPayment ?? !!req.body.invoiceId,
     });
     await logAudit(req, 'create', 'DriverCollection', data._id.toString(), req.body);
@@ -119,6 +125,7 @@ export async function recordCollection(req: AuthRequest, res: Response, next: Ne
 export async function listCollections(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const data = await collectionService.listCollections({
+      organizationId: orgId(req),
       driverId: req.query.driverId as string,
       customerId: req.query.customerId as string,
       reconciled: req.query.reconciled === 'true' ? true : req.query.reconciled === 'false' ? false : undefined,
@@ -135,7 +142,7 @@ export async function listCollections(req: AuthRequest, res: Response, next: Nex
 
 export async function reconcileCollection(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    const data = await collectionService.reconcileCollection(req.params.id, req.user!.id);
+    const data = await collectionService.reconcileCollection(req.params.id, req.user!.id, orgId(req));
     res.json({ success: true, data });
   } catch (err) {
     next(err);
@@ -145,6 +152,7 @@ export async function reconcileCollection(req: AuthRequest, res: Response, next:
 export async function collectionReport(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const data = await collectionService.getCollectionReport({
+      organizationId: orgId(req),
       from: req.query.from as string,
       to: req.query.to as string,
       driverId: req.query.driverId as string,
@@ -164,7 +172,7 @@ export const expenseValidation = [
 
 export async function createExpense(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    const data = await expenseService.createExpense({ ...req.body, userId: req.user!.id });
+    const data = await expenseService.createExpense({ ...req.body, userId: req.user!.id, organizationId: orgId(req) });
     await logAudit(req, 'create', 'Expense', data._id.toString(), req.body);
     res.status(201).json({ success: true, data });
   } catch (err) {
@@ -175,6 +183,7 @@ export async function createExpense(req: AuthRequest, res: Response, next: NextF
 export async function listExpenses(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const data = await expenseService.listExpenses({
+      organizationId: orgId(req),
       category: req.query.category as string,
       from: req.query.from as string,
       to: req.query.to as string,
@@ -190,6 +199,7 @@ export async function listExpenses(req: AuthRequest, res: Response, next: NextFu
 export async function expenseSummary(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const data = await expenseService.getExpenseSummary({
+      organizationId: orgId(req),
       from: req.query.from as string,
       to: req.query.to as string,
     });
@@ -201,7 +211,7 @@ export async function expenseSummary(req: AuthRequest, res: Response, next: Next
 
 export async function deleteExpense(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    await expenseService.deleteExpense(req.params.id);
+    await expenseService.deleteExpense(req.params.id, orgId(req));
     await logAudit(req, 'delete', 'Expense', req.params.id);
     res.json({ success: true, message: 'Expense deleted' });
   } catch (err) {
@@ -217,7 +227,7 @@ export const creditValidation = [
 
 export async function getCustomerCredit(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    const data = await creditService.getCustomerCredit(req.params.id);
+    const data = await creditService.getCustomerCredit(req.params.id, orgId(req));
     res.json({ success: true, data });
   } catch (err) {
     next(err);
@@ -229,6 +239,7 @@ export async function updateCustomerCredit(req: AuthRequest, res: Response, next
     const data = await creditService.updateCustomerCredit(req.params.id, {
       ...req.body,
       userId: req.user!.id,
+      organizationId: orgId(req),
     });
     await logAudit(req, 'update', 'Customer', req.params.id, { credit: req.body });
     res.json({ success: true, data });
@@ -240,7 +251,7 @@ export async function updateCustomerCredit(req: AuthRequest, res: Response, next
 // Customer 360
 export async function getCustomer360(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    const data = await customer360Service.getCustomer360(req.params.id);
+    const data = await customer360Service.getCustomer360(req.params.id, orgId(req));
     res.json({ success: true, data });
   } catch (err) {
     next(err);
@@ -250,7 +261,7 @@ export async function getCustomer360(req: AuthRequest, res: Response, next: Next
 // Driver performance
 export async function getDriverPerformance(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    const data = await driverPerformanceService.computeDriverPerformance(req.params.id, {
+    const data = await driverPerformanceService.computeDriverPerformance(req.params.id, orgId(req), {
       from: req.query.from as string,
       to: req.query.to as string,
       month: req.query.month as string,
@@ -264,7 +275,7 @@ export async function getDriverPerformance(req: AuthRequest, res: Response, next
 // Backup
 export async function exportBackup(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    const data = await backupService.exportDatabase();
+    const data = await backupService.exportDatabase(orgId(req));
     await logAudit(req, 'export', 'Backup', 'full', { collections: Object.keys(data).length });
     res.json({ success: true, data });
   } catch (err) {

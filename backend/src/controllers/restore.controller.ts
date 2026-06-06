@@ -17,8 +17,15 @@ export const restoreParams = [
   param('id').isMongoId(),
 ];
 
+function assertDocInOrg(doc: { organizationId?: { toString(): string } }, organizationId: string, label: string) {
+  if (!doc.organizationId || doc.organizationId.toString() !== organizationId) {
+    throw new ApiError(404, `${label} not found`);
+  }
+}
+
 export async function restoreEntity(req: AuthRequest, res: Response, next: NextFunction) {
   try {
+    const organizationId = req.user!.organizationId!;
     const entity = req.params.entity as keyof typeof ENTITY_MAP;
     const id = req.params.id;
     let doc;
@@ -38,6 +45,7 @@ export async function restoreEntity(req: AuthRequest, res: Response, next: NextF
     }
 
     if (!doc) throw new ApiError(404, `${entity.slice(0, -1)} not found`);
+    assertDocInOrg(doc, organizationId, entity.slice(0, -1));
     if (!doc.deletedAt) throw new ApiError(400, 'Entity is not deleted');
 
     await restoreDoc(doc);

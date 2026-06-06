@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { body } from 'express-validator';
-import { authenticate, authorize } from '../middleware/auth';
+import { authenticate, authorizeBusiness } from '../middleware/auth';
+import { requireOrganization } from '../middleware/organization';
 import { validate } from '../middleware/validate';
 import * as inventoryService from '../services/inventory.service';
 import { logAudit } from '../middleware/audit';
@@ -8,30 +9,30 @@ import { AuthRequest } from '../types';
 
 const router = Router();
 
-router.use(authenticate, authorize('owner'));
+router.use(authenticate, requireOrganization, authorizeBusiness());
 
-router.get('/', async (req, res, next) => {
+router.get('/', async (req: AuthRequest, res, next) => {
   try {
-    const data = await inventoryService.getInventorySnapshot();
+    const data = await inventoryService.getInventorySnapshot(req.user!.organizationId!);
     res.json({ success: true, data });
   } catch (err) {
     next(err);
   }
 });
 
-router.get('/reconcile', async (_req, res, next) => {
+router.get('/reconcile', async (req: AuthRequest, res, next) => {
   try {
-    const data = await inventoryService.reconcileInventory();
+    const data = await inventoryService.reconcileInventory(req.user!.organizationId!);
     res.json({ success: true, data });
   } catch (err) {
     next(err);
   }
 });
 
-router.get('/transactions', async (req, res, next) => {
+router.get('/transactions', async (req: AuthRequest, res, next) => {
   try {
     const page = req.query.page ? parseInt(req.query.page as string) : 1;
-    const data = await inventoryService.listInventoryTransactions(page);
+    const data = await inventoryService.listInventoryTransactions(req.user!.organizationId!, page);
     res.json({ success: true, data });
   } catch (err) {
     next(err);
@@ -50,7 +51,7 @@ router.put(
   ]),
   async (req: AuthRequest, res, next) => {
     try {
-      const data = await inventoryService.updateSettings(req.body, req.user!.id);
+      const data = await inventoryService.updateSettings(req.user!.organizationId!, req.body, req.user!.id);
       await logAudit(req, 'update', 'InventorySettings', undefined, req.body);
       res.json({ success: true, data });
     } catch (err) {
@@ -69,6 +70,7 @@ router.post(
   async (req: AuthRequest, res, next) => {
     try {
       const data = await inventoryService.adjustInventory(
+        req.user!.organizationId!,
         req.body.filledOut,
         req.body.emptyIn,
         req.body.notes || 'Manual adjustment',
@@ -78,7 +80,7 @@ router.post(
       res.json({ success: true, data });
     } catch (err) {
       next(err);
-    }
+  }
   }
 );
 

@@ -4,6 +4,7 @@ import { Sidebar } from './Sidebar';
 import { TopNavbar } from './TopNavbar';
 import { MobileBottomNav } from './MobileBottomNav';
 import { useAuth } from '@/hooks/useAuth';
+import { isBusinessUser } from '@/lib/auth-utils';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
@@ -20,7 +21,7 @@ export function AppLayout() {
   }, [location.pathname]);
 
   useEffect(() => {
-    if (user?.role === 'owner') {
+    if (isBusinessUser(user?.role)) {
       api.getAlerts().then((a) => setAlertCount(a.length)).catch(() => {});
     }
   }, [user?.role, location.pathname]);

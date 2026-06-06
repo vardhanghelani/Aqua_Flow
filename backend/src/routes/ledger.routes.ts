@@ -1,21 +1,22 @@
 import { Router } from 'express';
 import { param } from 'express-validator';
-import { authenticate, authorize } from '../middleware/auth';
+import { authenticate, authorizeBusiness } from '../middleware/auth';
+import { requireOrganization } from '../middleware/organization';
 import { validate } from '../middleware/validate';
 import * as ledgerService from '../services/ledger.service';
-import { Customer } from '../models';
+import { AuthRequest } from '../types';
 import PDFDocument from 'pdfkit';
 
 const router = Router();
 
-router.use(authenticate, authorize('owner'));
+router.use(authenticate, requireOrganization, authorizeBusiness());
 
 router.get(
   '/:customerId',
   validate([param('customerId').isMongoId()]),
-  async (req, res, next) => {
+  async (req: AuthRequest, res, next) => {
     try {
-      const data = await ledgerService.getCustomerLedger(req.params.customerId, {
+      const data = await ledgerService.getCustomerLedger(req.params.customerId, req.user!.organizationId!, {
         from: req.query.from as string,
         to: req.query.to as string,
         page: req.query.page ? parseInt(req.query.page as string) : 1,
@@ -31,9 +32,9 @@ router.get(
 router.get(
   '/:customerId/pdf',
   validate([param('customerId').isMongoId()]),
-  async (req, res, next) => {
+  async (req: AuthRequest, res, next) => {
     try {
-      const { customer, items } = await ledgerService.getCustomerLedger(req.params.customerId, {
+      const { customer, items } = await ledgerService.getCustomerLedger(req.params.customerId, req.user!.organizationId!, {
         from: req.query.from as string,
         to: req.query.to as string,
         limit: 500,
@@ -64,9 +65,9 @@ router.get(
 router.get(
   '/:customerId/csv',
   validate([param('customerId').isMongoId()]),
-  async (req, res, next) => {
+  async (req: AuthRequest, res, next) => {
     try {
-      const { customer, items } = await ledgerService.getCustomerLedger(req.params.customerId, {
+      const { customer, items } = await ledgerService.getCustomerLedger(req.params.customerId, req.user!.organizationId!, {
         from: req.query.from as string,
         to: req.query.to as string,
         limit: 1000,
@@ -81,7 +82,10 @@ router.get(
       ];
 
       res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', `attachment; filename="ledger-${(customer as { shopName?: string })?.shopName ?? 'customer'}.csv"`);
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="ledger-${(customer as { shopName?: string })?.shopName ?? 'customer'}.csv"`
+      );
       res.send(rows.join('\n'));
     } catch (err) {
       next(err);

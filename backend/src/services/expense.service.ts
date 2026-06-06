@@ -3,8 +3,10 @@ import { Expense, Delivery } from '../models';
 import { ExpenseCategory } from '../models/Expense';
 import { ApiError } from '../utils/apiError';
 import { parseDateOnly, endOfDay } from '../utils/date';
+import { assertExpenseInOrg, tenantFilter } from '../utils/tenant';
 
 export async function createExpense(input: {
+  organizationId: string;
   category: ExpenseCategory;
   description: string;
   amount: number;
@@ -14,6 +16,7 @@ export async function createExpense(input: {
   userId: string;
 }) {
   return Expense.create({
+    organizationId: new Types.ObjectId(input.organizationId),
     category: input.category,
     description: input.description,
     amount: input.amount,
@@ -25,13 +28,14 @@ export async function createExpense(input: {
 }
 
 export async function listExpenses(filters: {
+  organizationId: string;
   category?: string;
   from?: string;
   to?: string;
   page?: number;
   limit?: number;
 }) {
-  const query: Record<string, unknown> = {};
+  const query: Record<string, unknown> = tenantFilter(filters.organizationId);
   if (filters.category) query.category = filters.category;
   if (filters.from || filters.to) {
     query.expenseDate = {};
@@ -51,13 +55,14 @@ export async function listExpenses(filters: {
   return { items, total, page, limit };
 }
 
-export async function getExpenseSummary(filters: { from?: string; to?: string }) {
+export async function getExpenseSummary(filters: { organizationId: string; from?: string; to?: string }) {
   const dateMatch: Record<string, Date> = {};
   if (filters.from) dateMatch.$gte = parseDateOnly(filters.from);
   if (filters.to) dateMatch.$lte = endOfDay(parseDateOnly(filters.to));
 
-  const expenseMatch = Object.keys(dateMatch).length ? { expenseDate: dateMatch } : {};
-  const deliveryMatch: Record<string, unknown> = { status: 'delivered' };
+  const orgId = tenantFilter(filters.organizationId);
+  const expenseMatch = Object.keys(dateMatch).length ? { ...orgId, expenseDate: dateMatch } : orgId;
+  const deliveryMatch: Record<string, unknown> = { ...orgId, status: 'delivered' };
   if (Object.keys(dateMatch).length) deliveryMatch.deliveryDate = dateMatch;
 
   const [byCategory, expenseTotal, revenueTotal] = await Promise.all([
@@ -85,8 +90,8 @@ export async function getExpenseSummary(filters: { from?: string; to?: string })
   };
 }
 
-export async function deleteExpense(id: string) {
-  const expense = await Expense.findByIdAndDelete(id);
+export async function deleteExpense(id: string, organizationId: string) {
+  const expense = await Expense.findOneAndDelete(tenantFilter(organizationId, { _id: id }));
   if (!expense) throw new ApiError(404, 'Expense not found');
   return expense;
 }

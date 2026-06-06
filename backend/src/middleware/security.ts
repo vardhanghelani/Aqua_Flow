@@ -14,6 +14,14 @@ export const loginRateLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+export const provisionRateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  message: { success: false, message: 'Too many provision attempts. Try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 export const apiRateLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 300,

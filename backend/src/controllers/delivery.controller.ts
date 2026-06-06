@@ -74,6 +74,7 @@ export async function summary(req: AuthRequest, res: Response, next: NextFunctio
 export async function history(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const filters: Parameters<typeof deliveryService.getDeliveryHistory>[0] = {
+      organizationId: req.user!.organizationId!,
       customerId: req.query.customerId as string,
       driverId: req.user!.role === 'driver' ? req.user!.driverId : (req.query.driverId as string),
       areaId: req.query.areaId as string,

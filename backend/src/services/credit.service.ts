@@ -3,6 +3,7 @@ import { Customer, Invoice } from '../models';
 import { ApiError } from '../utils/apiError';
 import { startOfDay } from '../utils/date';
 import { getUninvoicedBillableTotal } from './ledger.service';
+import { assertCustomerInOrg } from '../utils/tenant';
 
 export function getEffectiveCreditLimit(customer: {
   creditLimit: number;
@@ -48,14 +49,14 @@ export function checkCreditStatus(customer: {
   };
 }
 
-export async function getCustomerCredit(customerId: string) {
-  const customer = await Customer.findById(customerId);
-  if (!customer) throw new ApiError(404, 'Customer not found');
+export async function getCustomerCredit(customerId: string, organizationId: string) {
+  const customer = await assertCustomerInOrg(customerId, organizationId);
 
   const credit = checkCreditStatus(customer);
   const today = startOfDay();
   const overdueInvoices = await Invoice.find({
     customerId: customer._id,
+    organizationId: customer.organizationId,
     status: { $in: ['unpaid', 'partially_paid', 'pending'] },
     dueDate: { $lt: today },
   }).select('invoiceNumber amountDue dueDate');
@@ -75,14 +76,14 @@ export async function getCustomerCredit(customerId: string) {
 export async function updateCustomerCredit(
   customerId: string,
   input: {
+    organizationId: string;
     creditLimit?: number;
     creditOverride?: number | null;
     creditOverrideReason?: string;
     userId: string;
   }
 ) {
-  const customer = await Customer.findById(customerId);
-  if (!customer) throw new ApiError(404, 'Customer not found');
+  const customer = await assertCustomerInOrg(customerId, input.organizationId);
 
   if (input.creditLimit !== undefined) customer.creditLimit = input.creditLimit;
   if (input.creditOverride !== undefined) {
@@ -92,7 +93,7 @@ export async function updateCustomerCredit(
   }
 
   await customer.save();
-  return getCustomerCredit(customerId);
+  return getCustomerCredit(customerId, input.organizationId);
 }
 
 export async function validateDeliveryCredit(customerId: string, additionalCharge: number) {

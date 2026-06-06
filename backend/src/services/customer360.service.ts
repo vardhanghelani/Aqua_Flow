@@ -10,17 +10,21 @@ import {
 import { ApiError } from '../utils/apiError';
 import { computeCustomerAnalytics } from './customerAnalytics.service';
 import { getCustomerCredit } from './credit.service';
+import { tenantFilter } from '../utils/tenant';
 
-export async function getCustomer360(customerId: string) {
-  const customer = await Customer.findOne({ _id: customerId, deletedAt: null }).populate('areaId', 'name');
+export async function getCustomer360(customerId: string, organizationId: string) {
+  const customer = await Customer.findOne({
+    ...tenantFilter(organizationId, { _id: customerId }),
+    deletedAt: null,
+  }).populate('areaId', 'name');
   if (!customer) throw new ApiError(404, 'Customer not found');
 
   const oid = new Types.ObjectId(customerId);
 
   const [analytics, credit, recentDeliveries, recentPayments, recentInvoices, ledgerRecent, coolerRecent] =
     await Promise.all([
-      computeCustomerAnalytics(customerId),
-      getCustomerCredit(customerId),
+      computeCustomerAnalytics(customerId, organizationId),
+      getCustomerCredit(customerId, organizationId),
       Delivery.find({ customerId: oid })
         .populate('driverId', 'name')
         .sort({ deliveryDate: -1 })

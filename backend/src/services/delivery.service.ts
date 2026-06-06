@@ -31,10 +31,14 @@ export async function saveDelivery(input: SaveDeliveryInput) {
     if (!customer || customer.status !== 'active') {
       throw new ApiError(404, 'Customer not found or inactive');
     }
+    if (!customer.organizationId) {
+      throw new ApiError(500, 'Customer organization missing');
+    }
 
     const assignment = await DriverAreaAssignment.findOne({
       driverId: new Types.ObjectId(input.driverId),
       areaId: customer.areaId,
+      organizationId: customer.organizationId,
       isActive: true,
     }).session(session ?? null);
     if (!assignment) {
@@ -47,7 +51,9 @@ export async function saveDelivery(input: SaveDeliveryInput) {
     let unitPrice = 0;
     let billableAmount = 0;
     if (input.status === 'delivered') {
-      unitPrice = customer.customPrice ?? (await getCurrentPrice());
+      const orgId = customer.organizationId?.toString();
+      if (!orgId) throw new ApiError(500, 'Customer organization missing');
+      unitPrice = customer.customPrice ?? (await getCurrentPrice(orgId));
       billableAmount = filledGiven * unitPrice;
     }
 
@@ -84,6 +90,7 @@ export async function saveDelivery(input: SaveDeliveryInput) {
       const [created] = await Delivery.create(
         [
           {
+            organizationId: customer.organizationId,
             customerId: customer._id,
             driverId: new Types.ObjectId(input.driverId),
             areaId: customer.areaId,
@@ -132,7 +139,10 @@ export async function saveDelivery(input: SaveDeliveryInput) {
       await customer.save(session ? { session } : undefined);
 
       if (filledDelta !== 0 || returnedDelta !== 0) {
+        const orgId = customer.organizationId?.toString();
+        if (!orgId) throw new ApiError(500, 'Customer organization missing');
         await applyDeliveryInventoryDelta(
+          orgId,
           prevFilled,
           prevReturned,
           newFilled,
@@ -142,6 +152,7 @@ export async function saveDelivery(input: SaveDeliveryInput) {
         );
 
         await recordDeliveryCoolerTransactions({
+          organizationId: orgId,
           customerId: customer._id.toString(),
           driverId: input.driverId,
           deliveryId: delivery._id.toString(),
@@ -223,6 +234,7 @@ export async function getTodaySummary(driverId: string, date?: Date) {
 }
 
 export async function getDeliveryHistory(filters: {
+  organizationId: string;
   customerId?: string;
   driverId?: string;
   areaId?: string;
@@ -231,7 +243,9 @@ export async function getDeliveryHistory(filters: {
   page?: number;
   limit?: number;
 }) {
-  const query: Record<string, unknown> = {};
+  const query: Record<string, unknown> = {
+    organizationId: new Types.ObjectId(filters.organizationId),
+  };
   if (filters.customerId) query.customerId = new Types.ObjectId(filters.customerId);
   if (filters.driverId) query.driverId = new Types.ObjectId(filters.driverId);
   if (filters.areaId) query.areaId = new Types.ObjectId(filters.areaId);

@@ -12,6 +12,7 @@ export async function logAudit(
 ): Promise<void> {
   try {
     await AuditLog.create({
+      organizationId: req.user?.organizationId,
       userId: req.user?.id,
       action,
       entityType,
