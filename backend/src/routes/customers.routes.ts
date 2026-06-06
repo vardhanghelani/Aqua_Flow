@@ -16,5 +16,6 @@ router.get('/:id/analytics', validate(ctrl.idParam), authorize('owner'), ctrl.ge
 router.get('/:id', validate(ctrl.idParam), authorize('owner'), ctrl.getCustomerById);
 router.post('/', authorize('owner'), validate(ctrl.customerValidation), ctrl.createCustomer);
 router.put('/:id', authorize('owner'), validate(ctrl.idParam), ctrl.updateCustomer);
+router.delete('/:id', authorize('owner'), validate(ctrl.idParam), ctrl.deleteCustomer);
 
 export default router;

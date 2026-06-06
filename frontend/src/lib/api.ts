@@ -63,8 +63,11 @@ class ApiClient {
   createDriver(data: Record<string, string>) {
     return this.request<import('@/types').Driver>('/drivers', { method: 'POST', body: JSON.stringify(data) });
   }
-  updateDriver(id: string, data: Partial<import('@/types').Driver>) {
+  updateDriver(id: string, data: Partial<import('@/types').Driver> & { loginId?: string; password?: string }) {
     return this.request<import('@/types').Driver>(`/drivers/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  }
+  deleteDriver(id: string) {
+    return this.request<{ message: string }>(`/drivers/${id}`, { method: 'DELETE' });
   }
 
   // Customers
@@ -77,6 +80,9 @@ class ApiClient {
   }
   updateCustomer(id: string, data: Record<string, unknown>) {
     return this.request<import('@/types').Customer>(`/customers/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  }
+  deleteCustomer(id: string) {
+    return this.request<{ message: string }>(`/customers/${id}`, { method: 'DELETE' });
   }
   getCustomer(id: string) {
     return this.request<import('@/types').Customer>(`/customers/${id}`);

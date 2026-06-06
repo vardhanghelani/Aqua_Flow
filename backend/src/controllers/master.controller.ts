@@ -1,7 +1,8 @@
 import { Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
+import { Types } from 'mongoose';
 import { body, param } from 'express-validator';
-import { Area, Driver, Customer, User } from '../models';
+import { Area, Driver, Customer, User, DriverAreaAssignment } from '../models';
 import { AuthRequest } from '../types';
 import { ApiError } from '../utils/apiError';
 import { logAudit } from '../middleware/audit';
@@ -79,6 +80,14 @@ export const driverValidation = [
   body('password').optional().isLength({ min: 6 }),
 ];
 
+export const driverUpdateValidation = [
+  body('name').optional().notEmpty(),
+  body('mobile').optional().notEmpty(),
+  body('loginId').optional().isString().trim().notEmpty(),
+  body('password').optional().isLength({ min: 6 }),
+  body('isActive').optional().isBoolean(),
+];
+
 export async function listDrivers(req: AuthRequest, res: Response, next: NextFunction) {
   try {
     const includeDeleted = req.query.includeDeleted === 'true';
@@ -131,14 +140,76 @@ export async function createDriver(req: AuthRequest, res: Response, next: NextFu
 
 export async function updateDriver(req: AuthRequest, res: Response, next: NextFunction) {
   try {
-    const driver = await Driver.findByIdAndUpdate(
-      req.params.id,
-      { ...pickFields(req.body, DRIVER_UPDATE_FIELDS), updatedBy: req.user!.id },
-      { new: true, runValidators: true }
-    );
-    if (!driver) throw new ApiError(404, 'Driver not found');
+    const driver = await Driver.findById(req.params.id);
+    if (!driver || driver.deletedAt) throw new ApiError(404, 'Driver not found');
+
+    const { loginId, password } = req.body;
+
+    Object.assign(driver, pickFields(req.body, DRIVER_UPDATE_FIELDS));
+    driver.updatedBy = new Types.ObjectId(req.user!.id);
+    await driver.save();
+
+    if (driver.userId) {
+      const userUpdates: Record<string, unknown> = {};
+      if (req.body.name) userUpdates.name = req.body.name;
+      if (typeof req.body.isActive === 'boolean') userUpdates.isActive = req.body.isActive;
+
+      if (loginId) {
+        const normalized = String(loginId).trim().toLowerCase();
+        const exists = await User.findOne({ loginId: normalized, _id: { $ne: driver.userId } });
+        if (exists) throw new ApiError(409, 'Login ID already in use');
+        userUpdates.loginId = normalized;
+      }
+      if (password) {
+        userUpdates.password = await bcrypt.hash(String(password), 10);
+      }
+      if (Object.keys(userUpdates).length > 0) {
+        await User.findByIdAndUpdate(driver.userId, userUpdates);
+      }
+    } else if (loginId && password) {
+      const normalized = String(loginId).trim().toLowerCase();
+      const exists = await User.findOne({ loginId: normalized });
+      if (exists) throw new ApiError(409, 'Login ID already in use');
+      const user = await User.create({
+        name: driver.name,
+        loginId: normalized,
+        password: await bcrypt.hash(String(password), 10),
+        role: 'driver',
+        createdBy: req.user!.id,
+      });
+      driver.userId = user._id;
+      user.driverProfile = driver._id;
+      await user.save();
+      await driver.save();
+    }
+
     await logAudit(req, 'update', 'Driver', driver._id.toString(), req.body);
-    res.json({ success: true, data: driver });
+    const updated = await Driver.findById(driver._id).populate('userId', 'loginId isActive');
+    res.json({ success: true, data: updated });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function deleteDriver(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const driver = await Driver.findById(req.params.id);
+    if (!driver || driver.deletedAt) throw new ApiError(404, 'Driver not found');
+
+    await DriverAreaAssignment.updateMany(
+      { driverId: driver._id, isActive: true },
+      { isActive: false, endDate: new Date(), updatedBy: req.user!.id }
+    );
+
+    driver.isActive = false;
+    await softDeleteDoc(driver, req.user!.id);
+
+    if (driver.userId) {
+      await User.findByIdAndUpdate(driver.userId, { isActive: false });
+    }
+
+    await logAudit(req, 'delete', 'Driver', req.params.id);
+    res.json({ success: true, message: 'Driver removed' });
   } catch (err) {
     next(err);
   }
@@ -187,9 +258,22 @@ export async function updateCustomer(req: AuthRequest, res: Response, next: Next
       { ...pickFields(req.body, CUSTOMER_UPDATE_FIELDS), updatedBy: req.user!.id },
       { new: true, runValidators: true }
     ).populate('areaId', 'name');
-    if (!customer) throw new ApiError(404, 'Customer not found');
+    if (!customer || customer.deletedAt) throw new ApiError(404, 'Customer not found');
     await logAudit(req, 'update', 'Customer', customer._id.toString(), req.body);
     res.json({ success: true, data: customer });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function deleteCustomer(req: AuthRequest, res: Response, next: NextFunction) {
+  try {
+    const customer = await Customer.findById(req.params.id);
+    if (!customer || customer.deletedAt) throw new ApiError(404, 'Customer not found');
+    customer.status = 'inactive';
+    await softDeleteDoc(customer, req.user!.id);
+    await logAudit(req, 'delete', 'Customer', req.params.id);
+    res.json({ success: true, message: 'Customer removed' });
   } catch (err) {
     next(err);
   }
