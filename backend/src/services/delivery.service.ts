@@ -109,34 +109,49 @@ export async function saveDelivery(input: SaveDeliveryInput) {
     const returnedDelta = newReturned - prevReturned;
     const isUpdate = !!existing;
 
-    if (filledDelta !== 0 || returnedDelta !== 0) {
-      customer.totalFilledGiven += filledDelta;
-      customer.totalEmptyReturned += returnedDelta;
+    if (filledDelta !== 0 || returnedDelta !== 0 || input.status !== existing?.status) {
+      // Recalculate from all delivered records — avoids negative totals when data was out of sync
+      const [coolerTotals] = await Delivery.aggregate([
+        { $match: { customerId: customer._id, status: 'delivered' } },
+        {
+          $group: {
+            _id: null,
+            filled: { $sum: '$filledGiven' },
+            returned: { $sum: '$emptyReturned' },
+          },
+        },
+      ]).session(session ?? null);
+
+      customer.totalFilledGiven = coolerTotals?.filled ?? 0;
+      customer.totalEmptyReturned = coolerTotals?.returned ?? 0;
       customer.currentBalance = customer.totalFilledGiven - customer.totalEmptyReturned;
+
       if (input.status === 'delivered') {
         customer.lastDeliveryDate = deliveryDate;
       }
       await customer.save(session ? { session } : undefined);
 
-      await applyDeliveryInventoryDelta(
-        prevFilled,
-        prevReturned,
-        newFilled,
-        newReturned,
-        input.userId,
-        delivery._id.toString()
-      );
+      if (filledDelta !== 0 || returnedDelta !== 0) {
+        await applyDeliveryInventoryDelta(
+          prevFilled,
+          prevReturned,
+          newFilled,
+          newReturned,
+          input.userId,
+          delivery._id.toString()
+        );
 
-      await recordDeliveryCoolerTransactions({
-        customerId: customer._id.toString(),
-        driverId: input.driverId,
-        deliveryId: delivery._id.toString(),
-        areaId: customer.areaId.toString(),
-        filledDelta,
-        returnedDelta,
-        userId: input.userId,
-        isReversal: input.status !== 'delivered',
-      });
+        await recordDeliveryCoolerTransactions({
+          customerId: customer._id.toString(),
+          driverId: input.driverId,
+          deliveryId: delivery._id.toString(),
+          areaId: customer.areaId.toString(),
+          filledDelta,
+          returnedDelta,
+          userId: input.userId,
+          isReversal: input.status !== 'delivered',
+        });
+      }
     }
 
     // Invoice-only ledger model: deliveries do not post ledger entries (C1)
